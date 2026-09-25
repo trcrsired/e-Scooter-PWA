@@ -14,6 +14,24 @@
   <p id="status"></p>
   <p id="battery"></p>
 
+  <details id="settings">
+    <summary id="settingsTitle">Settings</summary>
+    <p>
+      <label id="keyLabel" for="keyInput"></label><br>
+      <input id="keyInput" type="password" autocomplete="off"
+             placeholder="16 chars or 32 hex">
+    </p>
+    <p>
+      <label id="devIdLabel" for="devIdInput"></label><br>
+      <input id="devIdInput" type="text" autocomplete="off"
+             placeholder="device_id">
+    </p>
+    <button id="saveKeysBtn"></button>
+    <span id="keysStatus"></span>
+  </details>
+
+  <pre id="log" style="height:50vh;overflow:auto;border:1px solid #888;padding:8px;text-align:left;font-size:12px"></pre>
+
   <script src="app.js"></script>
 
   <script>
