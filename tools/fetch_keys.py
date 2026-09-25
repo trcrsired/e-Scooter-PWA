@@ -40,7 +40,7 @@ except ImportError:
         "  python3 -m venv .venv && .venv/bin/pip install -r tools/requirements.txt"
     )
 
-OUT_FILE = os.path.join(os.path.dirname(__file__), "..", "keys.json")
+OUT_FILE = os.path.join(os.path.dirname(__file__), "..", "source", "keys.json")
 
 
 def env(name, default=""):

@@ -94,8 +94,11 @@ Because credentials are static, a "server" reduces to a one-shot CLI:
 
 ```
 .venv/bin/python tools/fetch_keys.py   →  writes keys.json
-python3 -m http.server 8080            →  serves PWA + keys.json
+cd source && python3 -m http.server 8080  →  serves the PWA
 ```
+
+(`source/` is the web root — everything the site needs at runtime lives
+there; `cpp/`, `tools/`, docs stay outside.)
 
 `fetch_keys.py` (Tuya OpenAPI, same endpoints as `ha_tuya_ble`) dumps
 `device_id / uuid / local_key / product_id / category` plus the

@@ -2,9 +2,9 @@
   "name": "e-Scooter PWA",
   "short_name": "escooterpwa",
   "description": "a PWA for e-Scooter",
-  "start_url": "/",
-  "id": "/",
-  "scope": "/",
+  "start_url": "./",
+  "id": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
@@ -12,7 +12,7 @@
   "lang": "en",
   "icons": [
     {
-      "src": "/escooterpwa.webp",
+      "src": "escooterpwa.webp",
       "type": "image/webp",
       "sizes": "512x512"
     }
