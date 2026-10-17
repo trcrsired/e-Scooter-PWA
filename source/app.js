@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.9";
+const APP_VERSION = "0.7.10";
 
 // -------------------------
 // 1. Localization dictionary
@@ -1538,6 +1538,38 @@ function setConnected(connected) {
   connectBtn.classList.toggle("is-disconnect", connected);
 }
 
+const LS_BTID = "escooter.btid"; // BluetoothDevice.id we were last allowed to use
+
+// Web Bluetooth normally forces the device chooser on every launch. If the
+// browser supports navigator.bluetooth.getDevices() (i.e. it remembers the
+// origin's permission), reuse the last device and skip the chooser entirely.
+async function acquireDevice() {
+  const remembered = localStorage.getItem(LS_BTID) || "";
+  const canGet = typeof navigator.bluetooth.getDevices === "function";
+  if (remembered && canGet) {
+    try {
+      const known = await navigator.bluetooth.getDevices();
+      const found = known.find(d => d.id === remembered) ||
+        (known.length === 1 ? known[0] : null);
+      if (found) {
+        log("reusing remembered Bluetooth device: " + (found.name || found.id) + " (no chooser)");
+        return found;
+      }
+      log("remembered device not available; opening the chooser");
+    } catch (e) {
+      log("getDevices() failed: " + (e && e.message) + " \u2014 opening the chooser");
+    }
+  } else if (remembered && !canGet) {
+    log("this browser has no getDevices(); the chooser is required each time");
+  }
+  // Fallback: this MUST run inside the click's user gesture, so nothing else
+  // may be awaited before it.
+  return navigator.bluetooth.requestDevice({
+    acceptAllDevices: true,
+    optionalServices: OPTIONAL_SERVICES,
+  });
+}
+
 connectBtn.onclick = async () => {
   if (tuya) {
     tuya.disconnect();
@@ -1568,12 +1600,8 @@ connectBtn.onclick = async () => {
     setStatus(t.status_scanning, "is-busy");
     logEl.textContent = "";
 
-    // NOTE: requestDevice() must run inside the click's user gesture, so nothing
-    // may be awaited before it.
-    const device = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: OPTIONAL_SERVICES,
-    });
+    const device = await acquireDevice();
+    if (device.id) localStorage.setItem(LS_BTID, device.id);
     setStatus(t.status_selected(device.name || device.id), "is-busy");
 
     tuya = new TuyaBLE(Crypto, {

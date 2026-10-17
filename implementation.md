@@ -35,6 +35,13 @@ contains the datapoint `functions`/`status` spec, the writable/read-only tiles
 are built from it. Sending is **armed by default**; each send still asks for
 confirmation, and you can turn sending off in Debug.
 
+To reconnect later, just tap **Connect to scooter** again: the app remembers the
+Bluetooth device it was last allowed to use and, on browsers that expose
+`navigator.bluetooth.getDevices()` (Chrome/Edge desktop and Android), reuses it
+**without showing the chooser**. Browsers without that API still show the
+chooser each time — that is a Web Bluetooth limitation, not something the app
+can bypass.
+
 Credentials and the spec are imported deliberately through the UI; the app no
 longer fetches anything from the server on its own.
 
