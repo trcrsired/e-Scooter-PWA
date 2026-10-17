@@ -354,6 +354,16 @@ select { cursor: pointer; }
 .switch input:disabled + .slider { opacity: 0.45; }
 .switch input:disabled { cursor: not-allowed; }
 
+/* wake-lock row (keep the screen on while riding) */
+.wake-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 6px 0 2px;
+}
+.wake-label { color: var(--muted); font-size: 14px; }
+
 /* interactive control tiles */
 .tile-control { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .tile-control .tile-value { align-self: stretch; }

@@ -23,6 +23,8 @@ scooter's datapoints.
   *times* box empty) so it loops forever every *N* seconds.
 - **Speed warning** — flash/vibrate/toast when you go faster than a limit you
   set.
+- **Wake lock** — a "Keep screen on" toggle under the speed hero prevents the
+  phone from locking while riding.
 - **Ride-mode switch** — 🚶 Walk / 🍃 Eco / 🛴 D / ⚡ S, straight from the main UI.
 - **Lock & headlight** — 🔒 Locked / 🔓 Unlocked (dp 1) and 💡 On / 🔌 Off
   (dp 8) right on the Ride dashboard; it nags you to switch the headlight on

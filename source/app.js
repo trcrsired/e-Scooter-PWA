@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.30";
+const APP_VERSION = "0.7.31";
 
 // -------------------------
 // 1. Localization dictionary
@@ -106,6 +106,8 @@ const i18n = {
     dp_speed_d: "D speed limit",
     dp_speed_s: "S speed limit",
     dp_offline: "auto-off time",
+    wake_label: "Keep screen on",
+    wake_unsupported: "Wake Lock not supported here",
     mode_walk: "Walk",
     mode_eco: "Eco",
     mode_d: "D",
@@ -302,6 +304,8 @@ const i18n = {
     dp_speed_s: "运动限速",
     dp_offline: "自动关机时间",
     mode_walk: "步行",
+    wake_label: "保持屏幕常亮",
+    wake_unsupported: "此处不支持屏幕常亮",
     mode_eco: "节能",
     mode_d: "行驶",
     mode_s: "运动",
@@ -429,10 +433,36 @@ const confirmBody = $("confirmBody");
 // -------------------------
 // 3. Localization of static UI
 // -------------------------
+
+// ---- screen wake lock (keep the display on while riding) ----
+const wakeSupported = "wakeLock" in navigator;
+let wakeLock = null;
+async function requestWake() {
+  if (!wakeSupported) return;
+  try { wakeLock = await navigator.wakeLock.request("screen"); }
+  catch (e) { log("wake lock failed: " + (e && e.message)); wakeLock = null; }
+}
+function releaseWake() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+const wakeToggle = $("wakeToggle");
+if (!wakeSupported) {
+  wakeToggle.disabled = true;
+} else {
+  wakeToggle.addEventListener("change", () => {
+    if (wakeToggle.checked) requestWake(); else releaseWake();
+  });
+  // The OS drops the lock whenever the page is hidden; re-acquire it on return.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && wakeToggle.checked) requestWake();
+  });
+}
+
 function applyStatic() {
   document.documentElement.lang = lang;
   $("title").textContent = t.title;
   $("connectBtn").textContent = t.connect;
+  $("wakeLabel").textContent = wakeSupported ? t.wake_label : t.wake_unsupported;
   $("settingsTitle").textContent = t.settings;
   $("settingsHint").textContent = t.settings_hint;
   $("langTitle").textContent = t.lang_title;
