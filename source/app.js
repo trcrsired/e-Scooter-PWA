@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.24";
+const APP_VERSION = "0.7.25";
 
 // -------------------------
 // 1. Localization dictionary
@@ -89,6 +89,18 @@ const i18n = {
     volt: "Voltage",
     temp: "Temp",
     odo: "Odometer",
+    dp_lock: "lock",
+    dp_battery: "battery",
+    dp_headlight: "headlight",
+    dp_odometer: "total distance",
+    dp_gear: "ride mode (gear)",
+    dp_start_mode: "start mode",
+    dp_temp: "temperature",
+    dp_voltage: "voltage",
+    dp_speed_eco: "Eco speed limit",
+    dp_speed_d: "D speed limit",
+    dp_speed_s: "S speed limit",
+    dp_offline: "auto-off time",
     mode_walk: "Walk",
     mode_eco: "Eco",
     mode_d: "D",
@@ -260,6 +272,18 @@ const i18n = {
     volt: "电压",
     temp: "温度",
     odo: "总里程",
+    dp_lock: "锁",
+    dp_battery: "电量",
+    dp_headlight: "大灯",
+    dp_odometer: "总里程",
+    dp_gear: "骑行模式（挡位）",
+    dp_start_mode: "启动方式",
+    dp_temp: "温度",
+    dp_voltage: "电压",
+    dp_speed_eco: "节能限速",
+    dp_speed_d: "行驶限速",
+    dp_speed_s: "运动限速",
+    dp_offline: "自动关机时间",
     mode_walk: "步行",
     mode_eco: "节能",
     mode_d: "行驶",
@@ -1204,6 +1228,28 @@ const DT = TuyaDT;
 const DT_NAMES = Object.fromEntries(Object.entries(DT).map(([k, v]) => [v, k]));
 const dpUi = new Map(); // dp_id -> [update fn]
 
+// Friendly names for datapoints we have identified, so Debug shows e.g.
+// "dp 1 (lock)" instead of a bare "dp 1".
+const KNOWN_DPS = {
+  1: "dp_lock",
+  3: "dp_battery",
+  8: "dp_headlight",
+  12: "dp_odometer",
+  15: "dp_gear",
+  16: "dp_start_mode",
+  18: "dp_temp",
+  20: "dp_voltage",
+  101: "dp_speed_eco",
+  102: "dp_speed_d",
+  103: "dp_speed_s",
+  104: "dp_offline",
+};
+function dpLabel(id, code) {
+  const key = KNOWN_DPS[id];
+  if (key && t[key]) return "dp " + id + " (" + t[key] + ")";
+  return code || ("dp " + id);
+}
+
 function specToDt(type) {
   switch (String(type || "").toLowerCase()) {
     case "boolean": return DT.BOOL;
@@ -1255,7 +1301,7 @@ function makeTile(dpDef) {
 
   const lab = document.createElement("div");
   lab.className = "tile-label";
-  lab.textContent = dpDef.code || ("dp " + dpId);
+  lab.textContent = dpLabel(dpId, dpDef.code);
 
   const meta = document.createElement("div");
   meta.className = "tile-meta";
@@ -1350,7 +1396,7 @@ function makeControl(dpDef) {
 
   const lab = document.createElement("div");
   lab.className = "tile-label";
-  lab.textContent = dpDef.code || ("dp " + dpId);
+  lab.textContent = dpLabel(dpId, dpDef.code);
 
   const meta = document.createElement("div");
   meta.className = "tile-meta";

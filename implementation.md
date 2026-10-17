@@ -73,7 +73,9 @@ The main area has two tabs:
   toggle (with a threshold in the current unit) flashes the hero red, vibrates
   and toasts when you ride faster than the limit.
 - **Debug** — the raw datapoint UI: the safety note, the auto-generated
-  spec-driven controls, a manual datapoint sender, a **Query scooter state**
+  spec-driven controls (datapoints we have identified are labelled with their
+  meaning, e.g. `dp 1 (lock)`, `dp 8 (headlight)`, `dp 12 (total distance)`), a
+  manual datapoint sender, a **Query scooter state**
   button (re-asks the scooter to report every datapoint, so you can see whether
   a write was accepted) and a **Dump datapoints (JSON)** button that writes every
   known datapoint (id, code, kind, type, last value) to a timestamped JSON file —
