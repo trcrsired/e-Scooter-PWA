@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.8";
+const APP_VERSION = "0.7.9";
 
 // -------------------------
 // 1. Localization dictionary
@@ -55,6 +55,7 @@ const i18n = {
     manual_type: "Type",
     manual_value: "Value",
     manual_send: "Send",
+    query_status: "Query scooter state",
     diagnostics: "Diagnostics",
     clear_log: "Clear log",
     copy_log: "Copy log",
@@ -167,6 +168,7 @@ const i18n = {
     manual_type: "类型",
     manual_value: "数值",
     manual_send: "发送",
+    query_status: "查询滑板车状态",
     diagnostics: "诊断",
     clear_log: "清空日志",
     copy_log: "复制日志",
@@ -828,7 +830,7 @@ function requestSend(dpId, dt, rawValue, displayText, revert) {
   if (!armed) { toast(t.arm_needed); return; }
   askConfirm("dp " + dpId, displayText).then(ok => {
     if (!ok) { if (revert) revert(); return; }
-    log("→ dp " + dpId + " = " + (rawValue instanceof Uint8Array ? hex(rawValue) : rawValue));
+    log("→ dp " + dpId + " (" + (DT_NAMES[dt] || dt) + ") = " + (rawValue instanceof Uint8Array ? hex(rawValue) : rawValue));
     try {
       tuya.sendDp(dpId, dt, rawValue);
       toast(t.sent);
@@ -1044,12 +1046,25 @@ function buildManual() {
     requestSend(id, dt, raw, valIn.value, null);
   };
 
+  const queryBtn = document.createElement("button");
+  queryBtn.className = "ghost";
+  queryBtn.textContent = t.query_status;
+  queryBtn.disabled = !tuya;
+  queryBtn.onclick = () => {
+    if (!tuya) { toast(t.status_disconnected); return; }
+    log("query: requesting current datapoints from the scooter");
+    tuya.requestStatus();
+    toast(t.query_status);
+    setTimeout(() => { if (tuya) tuya.requestStatus(); }, 400);
+  };
+
   const fields = document.createElement("div");
   fields.className = "control-fields";
   fields.appendChild(idIn);
   fields.appendChild(typeSel);
   fields.appendChild(valIn);
   fields.appendChild(btn);
+  fields.appendChild(queryBtn);
   sec.appendChild(fields);
   return sec;
 }

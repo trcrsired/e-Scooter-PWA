@@ -56,7 +56,9 @@ The main area has two tabs:
   toggle (with a threshold in the current unit) flashes the hero red, vibrates
   and toasts when you ride faster than the limit.
 - **Debug** — the raw datapoint UI: the safety note, the auto-generated
-  spec-driven controls, the manual datapoint sender and the diagnostics log.
+  spec-driven controls, a manual datapoint sender, a **Query scooter state**
+  button (re-asks the scooter to report every datapoint, so you can see whether
+  a write was accepted) and the diagnostics log.
 
 **Settings** (the ⚙ button) is a full-screen view with sections:
 - **Language** — interface language (English / 中文) and which speech voice the

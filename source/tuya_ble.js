@@ -677,6 +677,14 @@
     return this.sendDps([{ id, type, value }]);
   };
 
+  // Ask the scooter to re-report all its datapoints (handy after a write, to
+  // see whether the scooter actually accepted the new value).
+  TuyaBLE.prototype.requestStatus = function () {
+    if (!this.device) return Promise.resolve();
+    this.log("→ device status request (query)");
+    return this.send(CODE.DEVICE_STATUS, new Uint8Array(0), { wait: false }).catch(() => {});
+  };
+
   global.TuyaBLE = TuyaBLE;
   global.TuyaDT = DT;
 })(window);
