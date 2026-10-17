@@ -56,7 +56,8 @@ The main area has two tabs:
   browser's `navigator.geolocation`, Haversine distance + device doppler speed,
   exponentially smoothed) with trip / max / average / elapsed time. Pick the
   display unit (**km/h**, **mph** or **m/s**). Tracking is manual: press
-  **Start tracking**. The scooter's own read-outs (battery, voltage, temp) are
+  **Start tracking**. The scooter's own read-outs (battery, voltage, temp, and
+  the lifetime odometer — dp 12, raw ÷ 10 = km) are
   shown as cards. A **mode selector** (🚶 Walk / 🍃 Eco / 🛴 行驶 / ⚡ 运动) shows
   the current ride mode from the gear datapoint (dp 15) and lets you switch it
   (through the usual confirmation gate). A **lock toggle** (dp 1 — the scooter's

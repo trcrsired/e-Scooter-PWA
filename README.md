@@ -13,7 +13,7 @@ scooter's datapoints.
 
 - **Ride dashboard** — a big GPS-speed hero with trip / max / average / elapsed
   time, unit toggle (**km/h · mph · m/s**) and live scooter read-outs (battery,
-  voltage, temperature).
+  voltage, temperature, total distance).
 - **Voice announcements** — optional spoken speed every *N* seconds, with a
   choice of any speech voice the browser offers.
 - **Speed warning** — flash/vibrate/toast when you go faster than a limit you

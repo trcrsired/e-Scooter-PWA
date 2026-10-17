@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.22";
+const APP_VERSION = "0.7.23";
 
 // -------------------------
 // 1. Localization dictionary
@@ -88,6 +88,7 @@ const i18n = {
     batt: "Battery",
     volt: "Voltage",
     temp: "Temp",
+    odo: "Odometer",
     mode_walk: "Walk",
     mode_eco: "Eco",
     mode_d: "D",
@@ -253,6 +254,7 @@ const i18n = {
     batt: "电量",
     volt: "电压",
     temp: "温度",
+    odo: "总里程",
     mode_walk: "步行",
     mode_eco: "节能",
     mode_d: "行驶",
@@ -1630,9 +1632,9 @@ function onDp(dp) {
 // 8b. Ride view: GPS speed, units, scooter read-outs, voice
 // -------------------------
 const UNITS = {
-  kmh: { speed: 1, speedLabel: "km/h", dist: 0.001, distLabel: "km", distDec: 2, speak: { en: "km per h", zh: "\u516c\u91cc\u6bcf\u5c0f\u65f6" } },
-  mph: { speed: 0.621371, speedLabel: "mph", dist: 0.000621371, distLabel: "mi", distDec: 2, speak: { en: "miles per h", zh: "\u82f1\u91cc\u6bcf\u5c0f\u65f6" } },
-  ms: { speed: 0.277778, speedLabel: "m/s", dist: 1, distLabel: "m", distDec: 1, speak: { en: "m per s", zh: "\u7c73\u6bcf\u79d2" } },
+  kmh: { speed: 1, speedLabel: "km/h", dist: 0.001, distKm: 1, distLabel: "km", distDec: 2, speak: { en: "km per h", zh: "\u516c\u91cc\u6bcf\u5c0f\u65f6" } },
+  mph: { speed: 0.621371, speedLabel: "mph", dist: 0.000621371, distKm: 0.621371, distLabel: "mi", distDec: 2, speak: { en: "miles per h", zh: "\u82f1\u91cc\u6bcf\u5c0f\u65f6" } },
+  ms: { speed: 0.277778, speedLabel: "m/s", dist: 1, distKm: 1000, distLabel: "m", distDec: 1, speak: { en: "m per s", zh: "\u7c73\u6bcf\u79d2" } },
 };
 const LS_UNIT = "escooter.unit";
 let unit = localStorage.getItem(LS_UNIT) || "kmh";
@@ -1648,6 +1650,7 @@ function setUnit(u) {
   $("rideMaxUnit").textContent = UNITS[u].speedLabel;
   $("rideAvgUnit").textContent = UNITS[u].speedLabel;
   $("rideTripUnit").textContent = UNITS[u].distLabel;
+  for (const [id, e] of rideCards) if (e.raw !== undefined) updateRideCard(id, e.raw);
   Geo.render();
   if (typeof updateWarnUi === "function") updateWarnUi();
 }
@@ -1777,6 +1780,7 @@ const RIDE_CARDS = [
   { id: 3, label: () => t.batt, scale: 0, unit: "%" },
   { id: 20, label: () => t.volt, scale: 2, unit: "V" },
   { id: 18, label: () => t.temp, scale: 1, unit: "°C" },
+  { id: 12, label: () => t.odo, scale: 1, odo: true }, // total distance since purchase (raw/10 km)
 ];
 const rideCards = new Map();
 function buildRideCards() {
@@ -1789,12 +1793,19 @@ function buildRideCards() {
     const val = document.createElement("div"); val.className = "tile-value"; val.textContent = "–";
     tile.appendChild(lab); tile.appendChild(val);
     host.appendChild(tile);
-    rideCards.set(c.id, { el: val, scale: c.scale, unit: c.unit });
+    rideCards.set(c.id, { el: val, scale: c.scale, unit: c.unit, odo: !!c.odo, raw: undefined });
   }
 }
 function updateRideCard(id, v) {
   const e = rideCards.get(id);
   if (!e || typeof v !== "number") return;
+  e.raw = v;
+  if (e.odo) {
+    // dp 12 is ten times the kilometre value (24034 -> 2403.4 km).
+    const u = UNITS[unit];
+    e.el.textContent = ((v / 10) * u.distKm).toFixed(1) + " " + u.distLabel;
+    return;
+  }
   const num = v / Math.pow(10, e.scale);
   e.el.textContent = (e.scale ? num.toFixed(e.scale) : num) + (e.unit ? " " + e.unit : "");
 }
