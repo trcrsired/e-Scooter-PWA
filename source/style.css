@@ -289,6 +289,16 @@ select { cursor: pointer; }
 
 .inline { display: flex; gap: 8px; align-items: center; }
 .inline input { flex: 1 1 auto; }
+
+/* per-mode speed value + allowed range */
+.speed-inputs {
+  display: grid;
+  grid-template-columns: 1.4fr auto 1fr auto 1fr;
+  gap: 6px;
+  align-items: center;
+}
+.speed-inputs input { width: 100%; min-width: 0; }
+.speed-min-lbl, .speed-max-lbl { font-size: 0.78rem; color: var(--muted); }
 .inline .ghost { flex: 0 0 auto; }
 
 /* toggle switch (checkbox + .slider) */
@@ -617,6 +627,9 @@ main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 .mode-btn .mode-emoji { font-size: 1.15rem; line-height: 1; }
 .mode-btn.is-active { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
 
+.ride-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.ride-controls .lock-btn { margin-bottom: 0; }
+
 .lock-btn {
   width: 100%;
   display: flex;
@@ -636,6 +649,7 @@ main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 .lock-btn .lock-icon { font-size: 1.25rem; line-height: 1; }
 .lock-btn.is-locked { background: var(--danger); border-color: var(--danger); color: #fff; }
 .lock-btn.is-unlocked { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+.lock-btn.is-on { background: var(--warn, #e8a13a); border-color: var(--warn, #e8a13a); color: #1a1a1a; }
 .lock-btn:disabled { opacity: 0.5; }
 
 .ride-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }

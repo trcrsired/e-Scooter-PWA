@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.17";
+const APP_VERSION = "0.7.18";
 
 // -------------------------
 // 1. Localization dictionary
@@ -56,6 +56,8 @@ const i18n = {
     manual_value: "Value",
     manual_send: "Send",
     query_status: "Query scooter state",
+    dump_dps: "Dump datapoints (JSON)",
+    dump_done: n => `Dumped ${n} datapoint(s)`,
     diagnostics: "Diagnostics",
     clear_log: "Clear log",
     copy_log: "Copy log",
@@ -98,6 +100,13 @@ const i18n = {
     lock_unknown: "Lock state unknown",
     lock_applied: v => `Lock confirmed: ${v}`,
     lock_rejected: v => `Lock not applied (still ${v})`,
+    light_on: "Headlight on",
+    light_off: "Headlight off",
+    light_unknown: "Headlight state unknown",
+    light_on_label: () => `\ud83d\udca1 ${t.light_on}`,
+    light_off_label: () => `\ud83d\udd0c ${t.light_off}`,
+    light_applied: v => `Headlight confirmed: ${v}`,
+    light_rejected: v => `Headlight not applied (still ${v})`,
     bt_name_label: "Bluetooth name filter",
     bt_name_note: "Only devices whose name starts with this appear in the chooser.",
     bt_name_prompt_title: "Remember this scooter?",
@@ -137,10 +146,12 @@ const i18n = {
     warn_at: (v, u) => `Warn above ${v} ${u}`,
     warn_over: (v, u) => `\u26a0 Too fast \u2014 ${v} ${u}`,
     speed_title: "Speed limits",
-    speed_note: "Maximum speed per riding mode, written to datapoints 101/102/103 (km/h).",
-    speed_eco: "Eco \u2014 dp 101 (5\u201315 km/h)",
-    speed_d: "D \u2014 dp 102 (10\u201324 km/h)",
-    speed_s: "S \u2014 dp 103 (20\u201331 km/h)",
+    speed_note: "Maximum speed per riding mode, written to datapoints 101/102/103 (km/h). Set the allowed range per mode; the value is clamped to it.",
+    speed_eco: "Eco \u2014 dp 101 (km/h)",
+    speed_d: "D \u2014 dp 102 (km/h)",
+    speed_s: "S \u2014 dp 103 (km/h)",
+    range_min: "min",
+    range_max: "max",
     speed_save: "Send speed limits",
     speed_sent: "Speed limits sent",
     speed_saved: "Speed limits saved",
@@ -197,6 +208,8 @@ const i18n = {
     manual_value: "数值",
     manual_send: "发送",
     query_status: "查询滑板车状态",
+    dump_dps: "导出数据点（JSON）",
+    dump_done: n => `已导出 ${n} 个数据点`,
     diagnostics: "诊断",
     clear_log: "清空日志",
     copy_log: "复制日志",
@@ -239,6 +252,13 @@ const i18n = {
     lock_unknown: "锁状态未知",
     lock_applied: v => `锁已确认：${v}`,
     lock_rejected: v => `锁未生效（仍为 ${v}）`,
+    light_on: "大灯已开",
+    light_off: "大灯已关",
+    light_unknown: "大灯状态未知",
+    light_on_label: () => `\ud83d\udca1 ${t.light_on}`,
+    light_off_label: () => `\ud83d\udd0c ${t.light_off}`,
+    light_applied: v => `大灯已确认：${v}`,
+    light_rejected: v => `大灯未生效（仍为 ${v}）`,
     bt_name_label: "蓝牙名称过滤",
     bt_name_note: "选择滑板车时，只显示名称以此开头的设备。",
     bt_name_prompt_title: "记住这台滑板车？",
@@ -278,10 +298,12 @@ const i18n = {
     warn_at: (v, u) => `超过 ${v} ${u} 时警告`,
     warn_over: (v, u) => `\u26a0 超速 —— ${v} ${u}`,
     speed_title: "速度限制",
-    speed_note: "各骑行模式下的最高速度，写入数据点 101/102/103（km/h）。",
-    speed_eco: "节能 \u2014 dp 101（5\u201315 km/h）",
-    speed_d: "行驶 \u2014 dp 102（10\u201324 km/h）",
-    speed_s: "运动 \u2014 dp 103（20\u201331 km/h）",
+    speed_note: "各骑行模式下的最高速度，写入数据点 101/102/103（km/h）。可为每个模式设置允许范围，数值会被限制在范围内。",
+    speed_eco: "节能 \u2014 dp 101（km/h）",
+    speed_d: "行驶 \u2014 dp 102（km/h）",
+    speed_s: "运动 \u2014 dp 103（km/h）",
+    range_min: "最小",
+    range_max: "最大",
     speed_save: "发送速度限制",
     speed_sent: "速度限制已发送",
     speed_saved: "速度限制已保存",
@@ -342,6 +364,8 @@ function applyStatic() {
   $("speedDLabel").textContent = t.speed_d;
   $("speedSLabel").textContent = t.speed_s;
   $("speedSaveBtn").textContent = t.speed_save;
+  document.querySelectorAll(".speed-min-lbl").forEach(e => { e.textContent = t.range_min; });
+  document.querySelectorAll(".speed-max-lbl").forEach(e => { e.textContent = t.range_max; });
   $("credTitle").textContent = t.credential_title;
   $("credHintText").textContent = t.cred_hint;
   $("credHelpSummary").textContent = t.cred_help;
@@ -679,6 +703,7 @@ function mergeImported(dev, i) {
   if (dev.status) out.status = dev.status;
   if (dev.bt_name) out.bt_name = dev.bt_name;
   if (dev.speeds && typeof dev.speeds === "object") out.speeds = dev.speeds;
+  if (dev.ranges && typeof dev.ranges === "object") out.ranges = dev.ranges;
   return out;
 }
 
@@ -755,33 +780,76 @@ $("devIdInput").addEventListener("change", () => updateActiveDevice({ device_id:
 $("uuidInput").addEventListener("change", () => updateActiveDevice({ uuid: uuidInput.value.trim() }));
 
 // ---- speed limits (dp 101/102/103 = Eco / D / S max speed, km/h) ----
-// [key, dp id, min, max]
-const SPEED_DPS = [["eco", 101, 5, 15], ["d", 102, 10, 24], ["s", 103, 20, 31]];
-function speedInputEl(key) { return $("speed" + key.charAt(0).toUpperCase() + key.slice(1)); }
+// [key, dp id]. Each profile also carries an editable allowed range per mode
+// (defaults below); the value is clamped to that range before it is sent.
+const SPEED_DPS = [["eco", 101], ["d", 102], ["s", 103]];
+const SPEED_DEFAULT_RANGES = { eco: { min: 5, max: 15 }, d: { min: 10, max: 24 }, s: { min: 20, max: 31 } };
+const speedCap = k => k.charAt(0).toUpperCase() + k.slice(1);
+function speedInputEl(key) { return $("speed" + speedCap(key)); }
+function rangeMinEl(key) { return $("speed" + speedCap(key) + "Min"); }
+function rangeMaxEl(key) { return $("speed" + speedCap(key) + "Max"); }
+
+function getRange(dev, key) {
+  const r = (dev && dev.ranges && dev.ranges[key]) || {};
+  const d = SPEED_DEFAULT_RANGES[key];
+  let min = Number(r.min), max = Number(r.max);
+  if (!Number.isFinite(min)) min = d.min;
+  if (!Number.isFinite(max)) max = d.max;
+  if (max < min) max = min;
+  return { min, max };
+}
 
 function loadSpeedInputs(dev) {
   const s = (dev && dev.speeds) || {};
   for (const [key] of SPEED_DPS) {
+    const { min, max } = getRange(dev, key);
+    rangeMinEl(key).value = String(min);
+    rangeMaxEl(key).value = String(max);
+    const valEl = speedInputEl(key);
+    valEl.min = String(min);
+    valEl.max = String(max);
     const kmh = Number(s[key]);
-    speedInputEl(key).value = Number.isFinite(kmh) && kmh > 0 ? String(Math.round(kmh)) : "";
+    valEl.value = Number.isFinite(kmh) && kmh > 0 ? String(Math.round(kmh)) : "";
   }
 }
 
 $("speedSaveBtn").addEventListener("click", async () => {
-  if (!tuya) { toast(t.status_disconnected); return; }
-  if (!armed) { toast(t.arm_needed); return; }
   const dev = importedDevices[activeIndex] || {};
   const prev = dev.speeds || {};
   const next = Object.assign({}, prev);
-  for (const [key, , min, max] of SPEED_DPS) {
-    const raw = speedInputEl(key).value.trim();
+  const ranges = {};
+  // Ranges and values are stored per profile even with no live session; only
+  // the datapoints that actually changed are sent (and only when armed).
+  for (const [key] of SPEED_DPS) {
+    const d = SPEED_DEFAULT_RANGES[key];
+    let min = Math.round(Number(rangeMinEl(key).value));
+    let max = Math.round(Number(rangeMaxEl(key).value));
+    if (!Number.isFinite(min) || min < 0) min = d.min;
+    if (!Number.isFinite(max) || max < min) max = d.max;
+    rangeMinEl(key).value = String(min);
+    rangeMaxEl(key).value = String(max);
+    ranges[key] = { min, max };
+
+    const valEl = speedInputEl(key);
+    valEl.min = String(min);
+    valEl.max = String(max);
+    const raw = valEl.value.trim();
     if (raw === "") continue;
     let v = Math.round(Number(raw));
     if (!Number.isFinite(v)) continue;
     v = Math.max(min, Math.min(max, v));
-    speedInputEl(key).value = String(v);
+    valEl.value = String(v);
     next[key] = v;
   }
+  updateActiveDevice({ speeds: next, ranges: ranges });
+
+  const savedOnly = () => {
+    $("speedStatus").textContent = t.speed_saved;
+    setTimeout(() => { $("speedStatus").textContent = ""; }, 2500);
+  };
+  if (!tuya) { savedOnly(); toast(t.status_disconnected); return; }
+  if (!armed) { savedOnly(); toast(t.arm_needed); return; }
+
   let sent = 0;
   for (const [key, dpId] of SPEED_DPS) {
     if (next[key] === undefined || next[key] === prev[key]) continue;
@@ -792,7 +860,6 @@ $("speedSaveBtn").addEventListener("click", async () => {
     try { tuya.sendDp(dpId, DT.VALUE, next[key]); sent++; }
     catch (e) { log("send failed: " + (e && e.message ? e.message : e)); }
   }
-  updateActiveDevice({ speeds: next });
   $("speedStatus").textContent = sent ? t.speed_sent : t.speed_saved;
   setTimeout(() => { $("speedStatus").textContent = ""; }, 2500);
   if (sent) setTimeout(() => { if (tuya) tuya.requestStatus(); }, 600);
@@ -832,6 +899,72 @@ $("exportBtn").addEventListener("click", () => {
   setTimeout(() => { $("exportStatus").textContent = ""; }, 2500);
   log("exported " + importedDevices.length + " scooter(s) + settings");
 });
+
+// ---- dump every known datapoint value to a timestamped JSON file ----
+function downloadJson(filename, obj) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function jsonable(v) {
+  if (v instanceof Uint8Array) return "0x" + hex(v).replace(/\s+/g, "");
+  if (typeof v === "bigint") return v.toString();
+  return v;
+}
+
+function dpMetaMap() {
+  const m = new Map();
+  const spec = deviceSpec || {};
+  for (const d of (spec.functions || [])) m.set(d.dp_id, { code: d.code || "", type: d.type || "", kind: "function" });
+  for (const d of (spec.status || [])) m.set(d.dp_id, { code: d.code || "", type: d.type || "", kind: "status" });
+  return m;
+}
+
+function buildDpDump() {
+  const meta = dpMetaMap();
+  const ids = new Set([...lastDp.keys(), ...observed, ...specIds]);
+  const datapoints = [];
+  for (const id of [...ids].sort((a, b) => a - b)) {
+    const m = meta.get(id) || {};
+    const reported = lastDp.has(id);
+    datapoints.push({
+      dp_id: id,
+      code: m.code || "",
+      kind: m.kind || (specIds.has(id) ? "spec" : "observed"),
+      type: m.type || "",
+      value: reported ? jsonable(lastDp.get(id)) : null,
+      reported: reported,
+    });
+  }
+  const dev = importedDevices[activeIndex] || {};
+  return {
+    timestamp: new Date().toISOString(),
+    app: "e-Scooter-PWA",
+    version: APP_VERSION,
+    connected: !!tuya,
+    scooter: {
+      name: dev.device_name || "",
+      device_id: dev.device_id || "",
+      uuid: dev.uuid || "",
+    },
+    datapoints: datapoints,
+  };
+}
+
+function dumpDps() {
+  const data = buildDpDump();
+  const stamp = data.timestamp.replace(/[:.]/g, "-");
+  downloadJson("escooter-dps-" + stamp + ".json", data);
+  log("dumped " + data.datapoints.length + " datapoint(s) to JSON (" + data.timestamp + ")");
+  toast(t.dump_done(data.datapoints.length));
+}
 
 // Restore app settings saved by buildExport() (called when importing a backup).
 function applySettings(s) {
@@ -1267,6 +1400,11 @@ function buildManual() {
     setTimeout(() => { if (tuya) tuya.requestStatus(); }, 400);
   };
 
+  const dumpBtn = document.createElement("button");
+  dumpBtn.className = "ghost";
+  dumpBtn.textContent = t.dump_dps;
+  dumpBtn.onclick = dumpDps;
+
   const fields = document.createElement("div");
   fields.className = "control-fields";
   fields.appendChild(idIn);
@@ -1274,6 +1412,7 @@ function buildManual() {
   fields.appendChild(valIn);
   fields.appendChild(btn);
   fields.appendChild(queryBtn);
+  fields.appendChild(dumpBtn);
   sec.appendChild(fields);
   return sec;
 }
@@ -1343,6 +1482,7 @@ function onDp(dp) {
   updateRideCard(dp.id, dp.value);
   updateGear(dp.id, dp.value, dp.type);
   updateLock(dp.id, dp.value, dp.type);
+  updateHeadlight(dp.id, dp.value, dp.type);
 }
 
 // -------------------------
@@ -1639,6 +1779,55 @@ function updateLock(id, v, type) {
 }
 $("lockBtn").addEventListener("click", onLockClick);
 
+// ---- headlight (dp 8) ----
+// dp 8 is the headlight boolean (true = on). Same pattern as the lock: a
+// first-class toggle in the Ride view, verified against the real read-back.
+const HEADLIGHT_DP = 8;
+let headlightType = null;
+let currentLight = null;
+let lightExpect = null;
+
+function renderLight() {
+  const btn = $("lightBtn");
+  if (!btn) return;
+  const on = currentLight === true;
+  btn.classList.toggle("is-on", on);
+  $("lightIcon").textContent = currentLight === null ? "💡" : (on ? "💡" : "🔌");
+  $("lightText").textContent = currentLight === null
+    ? t.light_unknown
+    : (on ? t.light_on : t.light_off);
+}
+
+function onLightClick() {
+  if (!tuya) { toast(t.status_disconnected); return; }
+  if (!armed) { toast(t.arm_needed); return; }
+  const want = currentLight ? 0 : 1; // toggle
+  const label = want ? t.light_on_label() : t.light_off_label();
+  requestSend(HEADLIGHT_DP, headlightType || DT.BOOL, want, label, null,
+    () => { lightExpect = { value: want, at: Date.now() }; });
+}
+
+function updateHeadlight(id, v, type) {
+  if (id !== HEADLIGHT_DP) return;
+  if (type != null) headlightType = type;
+  if (v == null) return;
+  currentLight = (typeof v === "boolean") ? v : !!Number(v);
+  renderLight();
+  if (lightExpect && Date.now() - lightExpect.at < 8000) {
+    const want = lightExpect.value;
+    lightExpect = null;
+    const got = currentLight ? 1 : 0;
+    const ok = got === want;
+    log(ok
+      ? "headlight read-back: dp 8 = " + got + " — scooter applied it"
+      : "headlight read-back: dp 8 = " + got + " (asked for " + want + ") — scooter did NOT apply it");
+    toast(ok
+      ? t.light_applied(got ? t.light_on : t.light_off)
+      : t.light_rejected(got ? t.light_on : t.light_off));
+  }
+}
+$("lightBtn").addEventListener("click", onLightClick);
+
 // ---- voice speed announcements (Web Speech API) ----
 const LS_TTS = "escooter.tts";
 const ttsToggle = $("ttsToggle"), ttsEvery = $("ttsEvery"), ttsMax = $("ttsMax");
@@ -1787,6 +1976,7 @@ function setLang(l) {
   populateVoices();
   updateWarnUi();
   renderLock();
+  renderLight();
   log("language: " + l);
 }
 $("langSelect").addEventListener("change", () => setLang($("langSelect").value));
@@ -1997,6 +2187,7 @@ $("copyLogBtn").onclick = async () => {
   setUnit(unit);
   populateVoices();
   renderLock();
+  renderLight();
   if (!ok) log("(connect is disabled until the crypto module loads)");
   log("secure context: " + window.isSecureContext);
   if (!("bluetooth" in navigator)) {

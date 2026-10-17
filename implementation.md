@@ -57,7 +57,8 @@ The main area has two tabs:
   shown as cards. A **mode selector** (🚶 Walk / 🍃 Eco / 🛴 行驶 / ⚡ 运动) shows
   the current ride mode from the gear datapoint (dp 15) and lets you switch it
   (through the usual confirmation gate). A **lock toggle** (dp 1 — the scooter's
-  lock boolean, shown as 🔒 Locked / 🔓 Unlocked) sits right under the hero.
+  lock boolean, shown as 🔒 Locked / 🔓 Unlocked) and a **headlight toggle**
+  (dp 8, 💡 On / 🔌 Off) sit side by side right under the hero.
   An optional **speed announcement**
   toggle speaks the current speed with the Web Speech API every *N* seconds
   (default 30) for at most *M* times (`0` = unlimited) — kept minimal and spoken
@@ -67,7 +68,10 @@ The main area has two tabs:
 - **Debug** — the raw datapoint UI: the safety note, the auto-generated
   spec-driven controls, a manual datapoint sender, a **Query scooter state**
   button (re-asks the scooter to report every datapoint, so you can see whether
-  a write was accepted) and the diagnostics log (every line is prefixed with an
+  a write was accepted) and a **Dump datapoints (JSON)** button that writes every
+  known datapoint (id, code, kind, type, last value) to a timestamped JSON file —
+  handy for working out what a datapoint does. Plus the diagnostics log (every
+  line is prefixed with an
   ISO 8601 timestamp, e.g. `2026-10-17T20:31:05.123Z`). A v4 DP write is
   acknowledged by the scooter with a `0x27` response that echoes the request's
   5-byte header and appends a **status byte** (`0x00` = accepted, non-zero =
@@ -88,9 +92,12 @@ The main area has two tabs:
   app offers (once) to save the connected device's advertised name as the
   filter. Importing a JSON merges into this list, and the credentials below
   always apply to the selected scooter.
-- **Speed limits** — the Eco / D / S maximum speed (dp 101 / 102 / 103, km/h;
-  Eco 5–15, D 10–24, S 20–31). Stored per profile; sending goes through the usual
-  confirmation gate, and only the values that changed are written.
+- **Speed limits** — the Eco / D / S maximum speed (dp 101 / 102 / 103, km/h).
+  Each mode also has an editable **allowed range** (defaults, i.e. the values we
+  reverse-engineered: Eco 5–15, D 10–24, S 20–31); the value is clamped to its
+  range before being sent, and the value input's `min`/`max` follow it. Ranges
+  and values are stored per profile and saved even offline; sending goes through
+  the usual confirmation gate, and only the values that changed are written.
 - **Credential** — importing your scooter's JSON from the Tuya IoT platform is
   the preferred way (there is a short step-by-step guide and a link to
   <https://iot.tuya.com/> right there). Manual `local_key` / `device_id` /
