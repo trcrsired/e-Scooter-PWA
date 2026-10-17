@@ -22,9 +22,9 @@ facts marked ✅ are confirmed, ❓ are hypotheses to verify.
 │  Tuya BLE frames: seq | type | len | data   │
 │  + CRC16, payload AES-encrypted (see §4)    │
 ├─────────────────────────────────────────────┤
-│  GATT writes to char 0x2b10                 │
-│  notifications from char 0x2b11             │
-│  (service 0x1910 — "Tuya BLE serial")       │
+│  GATT writes to char 0x2b11                 │
+│  notifications from char 0x2b10             │
+│  (service 0xa201 / 0x1910 — Tuya BLE)       │
 ├─────────────────────────────────────────────┤
 │  BLE link (this part already works → beep)  │
 └─────────────────────────────────────────────┘
@@ -156,12 +156,18 @@ comes from two sources:
 
 ## 8. Open questions
 
-- ❓ Is service `0x1910` actually present? (run the probe)
-- ❓ Protocol version the firmware speaks (v3/v4/v5 differ in packet
-  layout) — visible once we see device_info bytes
-- ❓ Which DP IDs map to lock / speed / lights / cruise / battery
-- ❓ Does it demand a pair handshake on every connection, or accept
-  the stored session?
+- ❓ Is service `0xa201`/`0x1910` actually present? (the app now logs whatever
+  it finds; `write 0x2b11` / `notify 0x2b10` is preferred, else the single
+  writable/notifiable characteristic)
+- ✅ Protocol version the firmware speaks (v3/v4 differ in packet layout) — read
+  from device-info reply byte [2]; classic (flag 4/5) frames are implemented
+- ❓ Which DP IDs map to lock / speed / lights / cruise / battery — taken
+  automatically from the `functions`/`status` arrays in `keys.json`
+- ✅ Handshake runs on every connection (device info → pair → state query),
+  implemented in `source/tuya_ble.js`
+- ❓ Classic (flag 4/5) vs secure-V2 (modes 11–16, see `../TuyaOpen/src/
+  tuya_cloud_service/ble/`) — if the handshake times out the scooter is likely
+  secure-V2 and that path still needs porting
 
 ## 9. Reference material in this workspace
 

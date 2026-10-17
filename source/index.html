@@ -1,37 +1,81 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>e-Scooter PWA</title>
+  <meta name="theme-color" content="#0b0d10">
+  <meta name="color-scheme" content="light dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Keep the browser chrome colour in sync with the active colour scheme.
+    (function () {
+      var mq = window.matchMedia("(prefers-color-scheme: dark)");
+      var meta = document.querySelector('meta[name="theme-color"]');
+      function apply() { meta.setAttribute("content", mq.matches ? "#0b0d10" : "#f4f6f9"); }
+      apply();
+      mq.addEventListener && mq.addEventListener("change", apply);
+    })();
+  </script>
 </head>
 <body>
-  <h1 id="title"></h1>
+  <header class="appbar">
+    <h1 id="title">e-Scooter</h1>
+    <button id="settingsBtn" class="icon-btn" aria-label="Settings">⚙</button>
+  </header>
 
-  <button id="connectBtn"></button>
+  <main>
+    <div id="status" class="status">
+      <span class="dot"></span>
+      <span id="statusText"></span>
+    </div>
 
-  <p id="status"></p>
-  <p id="battery"></p>
+    <button id="connectBtn" class="primary"></button>
 
-  <details id="settings">
-    <summary id="settingsTitle">Settings</summary>
-    <p>
-      <label id="keyLabel" for="keyInput"></label><br>
-      <input id="keyInput" type="password" autocomplete="off"
-             placeholder="16 chars or 32 hex">
-    </p>
-    <p>
-      <label id="devIdLabel" for="devIdInput"></label><br>
-      <input id="devIdInput" type="text" autocomplete="off"
-             placeholder="device_id">
-    </p>
-    <button id="saveKeysBtn"></button>
-    <span id="keysStatus"></span>
+    <div id="controls"></div>
+  </main>
+
+  <div id="settingsOverlay" class="overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="sheet-header">
+        <h2 id="settingsTitle"></h2>
+        <button id="closeSettingsBtn" class="icon-btn" aria-label="Close">✕</button>
+      </div>
+      <p id="settingsHint" class="sheet-hint"></p>
+
+      <div class="field">
+        <label id="keyLabel" for="keyInput"></label>
+        <input id="keyInput" type="password" autocomplete="off" autocapitalize="off"
+               spellcheck="false" placeholder="local_key">
+      </div>
+      <div class="field">
+        <label id="devIdLabel" for="devIdInput"></label>
+        <input id="devIdInput" type="text" autocomplete="off" autocapitalize="off"
+               spellcheck="false" placeholder="device_id">
+      </div>
+      <div class="field">
+        <label id="uuidLabel" for="uuidInput"></label>
+        <input id="uuidInput" type="text" autocomplete="off" autocapitalize="off"
+               spellcheck="false" placeholder="uuid">
+      </div>
+
+      <div class="sheet-actions">
+        <button id="saveKeysBtn" class="primary"></button>
+        <span id="keysStatus" class="saved-note"></span>
+      </div>
+    </div>
+  </div>
+
+  <details class="log-wrap">
+    <summary id="diagSummary">Diagnostics</summary>
+    <button id="clearLogBtn" class="ghost"></button>
+    <pre id="log" class="log"></pre>
   </details>
 
-  <pre id="log" style="height:50vh;overflow:auto;border:1px solid #888;padding:8px;text-align:left;font-size:12px"></pre>
-
+  <script src="tuya_ble.js"></script>
   <script src="app.js"></script>
 
   <script>
