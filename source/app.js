@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.27";
+const APP_VERSION = "0.7.28";
 
 // -------------------------
 // 1. Localization dictionary
@@ -1171,6 +1171,7 @@ function refillFromLastDp() {
     const handlers = dpUi.get(id);
     if (handlers) for (const fn of handlers) fn(v);
     updateRideCard(id, v);
+    updatePanelSpeed(id, v);
     updateGear(id, v, undefined);
     updateLock(id, v, undefined);
     updateHeadlight(id, v, undefined);
@@ -1190,6 +1191,7 @@ function showDeviceState(dev) {
   currentLight = null;
   currentStartMode = null;
   currentPanelUnit = null;
+  panelSpeedKmh = null;
   buildControls(deviceSpec);
   buildRideCards();
   buildModeButtons();
@@ -1728,6 +1730,7 @@ function onDp(dp) {
   if (handlers) for (const fn of handlers) fn(dp.value);
   addObservedTile(dp.id);
   updateRideCard(dp.id, dp.value);
+  updatePanelSpeed(dp.id, dp.value);
   updateGear(dp.id, dp.value, dp.type);
   updateLock(dp.id, dp.value, dp.type);
   updateHeadlight(dp.id, dp.value, dp.type);
@@ -1819,13 +1822,37 @@ function fmtTime(secs) {
   return m + ":" + String(s).padStart(2, "0");
 }
 
+// The scooter's own panel speed (dp 2, km/h, 1:1). It is only used as a cap for
+// the distance-based GPS fallback; when the browser reports coords.speed we
+// always trust it, even if it reads above the panel.
+const PANEL_SPEED_DP = 2;
+let panelSpeedKmh = null;
+function updatePanelSpeed(id, v) {
+  if (id !== PANEL_SPEED_DP) return;
+  panelSpeedKmh = (typeof v === "number" && isFinite(v)) ? v : null;
+}
+
+// Fallback speed (only when coords.speed is null), mirroring pwa-geolocation:
+// speed from an averaged start point → the current fix, then the average of the
+// recent samples over a 30 s window.
+const GEO_START_WINDOW = 30000;
+function geoStartPoint(hist, now) {
+  if (!hist.length) return { lat: 0, lon: 0, t: now };
+  const pts = (now - hist[0].t < GEO_START_WINDOW && hist.length > 1) ? hist.slice(0, -1) : hist;
+  let lat = 0, lon = 0, tt = 0;
+  for (const p of pts) { lat += p.lat; lon += p.lon; tt += p.t; }
+  const n = pts.length;
+  return { lat: lat / n, lon: lon / n, t: tt / n };
+}
+
 const Geo = {
   watchId: null, running: false, lastPos: null, timer: null,
   tripM: 0, maxKmh: 0, sumKmh: 0, samples: 0, startedAt: 0, speedKmh: 0,
+  hist: [], speedSamples: [],
   start() {
     if (!("geolocation" in navigator)) { log(t.gps_unsupported); return; }
     this.tripM = 0; this.maxKmh = 0; this.sumKmh = 0; this.samples = 0;
-    this.speedKmh = 0; this.lastPos = null;
+    this.speedKmh = 0; this.lastPos = null; this.hist = []; this.speedSamples = [];
     this.startedAt = Date.now(); this.running = true;
     $("gpsBtn").textContent = t.gps_stop;
     $("rideGpsState").textContent = t.gps_waiting;
@@ -1850,22 +1877,42 @@ const Geo = {
   onPos(pos) {
     const c = pos.coords, tms = pos.timestamp || Date.now();
     const native = (typeof c.speed === "number" && isFinite(c.speed) && c.speed >= 0) ? c.speed : null;
+    const cur = { t: tms, lat: c.latitude, lon: c.longitude };
+    // Keep the fixes inside the averaging window.
+    this.hist.push(cur);
+    this.hist = this.hist.filter(p => tms - p.t <= GEO_START_WINDOW);
+
+    // Distance moved since the previous fix (used for the trip odometer).
     let moved = 0, dt = 0;
     if (this.lastPos) {
       dt = (tms - this.lastPos.t) / 1000;
       if (dt > 0) {
-        const d = haversine(this.lastPos, { lat: c.latitude, lon: c.longitude });
+        const d = haversine(this.lastPos, cur);
         if (dt <= 10 && d <= 300) moved = d;   // reject teleports / stale fixes
       }
     }
+
     if (native != null) {
-      // The device's own GNSS speed (coords.speed, in m/s) is authoritative —
-      // use it directly, like pwa-geolocation, instead of the noisy distance/dt.
+      // The device's own GNSS speed (coords.speed, m/s) is authoritative — use
+      // it directly, even if it reads above the scooter's panel speed.
       this.speedKmh = native * 3.6;
-    } else if (dt > 0 && moved > 0) {
-      const inst = (moved / dt) * 3.6;
-      this.speedKmh = this.speedKmh * 0.4 + inst * 0.6;  // EMA fallback
+    } else {
+      // No coords.speed: estimate from an averaged start point → current fix,
+      // then average the recent samples (pwa-geolocation's method).
+      const start = geoStartPoint(this.hist, tms);
+      const sdt = (tms - start.t) / 1000;
+      const vSample = sdt > 0 ? haversine(start, cur) / sdt : 0;
+      const nowMs = Date.now();
+      this.speedSamples.push({ t: nowMs, v: vSample });
+      this.speedSamples = this.speedSamples.filter(s => nowMs - s.t <= GEO_START_WINDOW);
+      const avgV = this.speedSamples.reduce((s, x) => s + x.v, 0) / this.speedSamples.length;
+      let kmh = avgV * 3.6;
+      // Never exceed the scooter's own reported panel speed for a distance-based
+      // estimate; if it would, fall back to the panel speed.
+      if (panelSpeedKmh != null && kmh > panelSpeedKmh) kmh = panelSpeedKmh;
+      this.speedKmh = kmh;
     }
+
     if (this.speedKmh < 1) this.speedKmh = 0;
     if (this.speedKmh > this.maxKmh) this.maxKmh = this.speedKmh;
     if (this.speedKmh > 0) { this.sumKmh += this.speedKmh; this.samples++; }

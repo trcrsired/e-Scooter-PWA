@@ -56,8 +56,11 @@ to hide it again; the choice is remembered in `localStorage`):
 
 - **Ride** — a speed dashboard. A big hero shows your *GPS* speed. When the
   browser's Geolocation API supplies `coords.speed` (GNSS doppler) it is used
-  **directly**, exactly like `pwa-geolocation`; otherwise the app falls back to a
-  Haversine distance ÷ time estimate with light EMA smoothing. Alongside it:
+  **directly**, exactly like `pwa-geolocation`, even if it reads above the panel.
+  Otherwise the app uses `pwa-geolocation`'s estimate (speed from an averaged
+  start point → the current fix, then the average of the samples over a 30 s
+  window), **capped at the scooter's own reported panel speed (dp 2)** so the
+  estimate can never exceed what the scooter itself shows. Alongside it:
   trip / max / average / elapsed time, plus your
   live **GPS coordinates** (📍 latitude, longitude, 6 dp) while tracking. Pick the
   display unit (**km/h**, **mph** or **m/s**). Tracking is manual: press

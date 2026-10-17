@@ -15,8 +15,9 @@ scooter's datapoints.
   time and your live GPS coordinates (📍 lat, lon) when tracking, unit toggle
   (**km/h · mph · m/s**) and live scooter read-outs (panel speed, battery,
   voltage, temperature, total distance). Speed comes from the browser
-  Geolocation API's own `coords.speed` (GNSS doppler), with a distance/time
-  estimate as fallback.
+  Geolocation API's own `coords.speed` (GNSS doppler) when available; otherwise
+  it is estimated from position over a 30 s window and capped at the scooter's
+  reported panel speed (dp 2).
 - **Voice announcements** — optional spoken speed every *N* seconds, with a
   choice of any speech voice the browser offers. Unlimited by default (leave the
   *times* box empty) and it only speaks above 5 km/h.
