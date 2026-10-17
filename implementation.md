@@ -96,8 +96,10 @@ The main area has two tabs:
   Each mode also has an editable **allowed range** (defaults, i.e. the values we
   reverse-engineered: Eco 5–15, D 10–24, S 20–31); the value is clamped to its
   range before being sent, and the value input's `min`/`max` follow it. Ranges
-  and values are stored per profile and saved even offline; sending goes through
-  the usual confirmation gate, and only the values that changed are written.
+  and values are stored per profile and saved even offline; **changing a range
+  triggers an extra safety warning confirmation** (a high maximum can make the
+  scooter dangerously fast), and sending goes through the usual confirmation
+  gate; only the values that changed are written.
 - **Credential** — importing your scooter's JSON from the Tuya IoT platform is
   the preferred way (there is a short step-by-step guide and a link to
   <https://iot.tuya.com/> right there). Manual `local_key` / `device_id` /

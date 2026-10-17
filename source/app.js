@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.18";
+const APP_VERSION = "0.7.19";
 
 // -------------------------
 // 1. Localization dictionary
@@ -152,6 +152,10 @@ const i18n = {
     speed_s: "S \u2014 dp 103 (km/h)",
     range_min: "min",
     range_max: "max",
+    range_warn_title: "Change the allowed range?",
+    range_warn_body: "You are changing the allowed speed range of a riding mode. Setting a high maximum can make the scooter go dangerously fast — beyond what it can safely brake or handle. Only change this if you know your scooter's limits. Continue?",
+    range_warn_ok: "I understand \u2014 change it",
+    range_warn_cancel: "Keep current range",
     speed_save: "Send speed limits",
     speed_sent: "Speed limits sent",
     speed_saved: "Speed limits saved",
@@ -304,6 +308,10 @@ const i18n = {
     speed_s: "运动 \u2014 dp 103（km/h）",
     range_min: "最小",
     range_max: "最大",
+    range_warn_title: "更改允许范围？",
+    range_warn_body: "你正在更改某个骑行模式的允许速度范围。设置过高的上限会使滑板车达到危险的高速，超出其安全制动与操控能力。仅当你了解自己滑板车的限速时才更改。是否继续？",
+    range_warn_ok: "我了解 —— 仍然更改",
+    range_warn_cancel: "保留当前范围",
     speed_save: "发送速度限制",
     speed_sent: "速度限制已发送",
     speed_saved: "速度限制已保存",
@@ -818,10 +826,12 @@ $("speedSaveBtn").addEventListener("click", async () => {
   const prev = dev.speeds || {};
   const next = Object.assign({}, prev);
   const ranges = {};
+  let rangeChanged = false;
   // Ranges and values are stored per profile even with no live session; only
   // the datapoints that actually changed are sent (and only when armed).
   for (const [key] of SPEED_DPS) {
     const d = SPEED_DEFAULT_RANGES[key];
+    const cur = getRange(dev, key); // the profile's saved range
     let min = Math.round(Number(rangeMinEl(key).value));
     let max = Math.round(Number(rangeMaxEl(key).value));
     if (!Number.isFinite(min) || min < 0) min = d.min;
@@ -829,6 +839,7 @@ $("speedSaveBtn").addEventListener("click", async () => {
     rangeMinEl(key).value = String(min);
     rangeMaxEl(key).value = String(max);
     ranges[key] = { min, max };
+    if (min !== cur.min || max !== cur.max) rangeChanged = true;
 
     const valEl = speedInputEl(key);
     valEl.min = String(min);
@@ -841,6 +852,14 @@ $("speedSaveBtn").addEventListener("click", async () => {
     valEl.value = String(v);
     next[key] = v;
   }
+
+  // Changing the allowed range (especially a high maximum) is a safety-relevant
+  // action, so it needs an explicit extra acknowledgement before anything is saved.
+  if (rangeChanged) {
+    const ok = await askPrompt(t.range_warn_title, t.range_warn_body, t.range_warn_ok, t.range_warn_cancel);
+    if (!ok) { loadSpeedInputs(dev); return; }
+  }
+
   updateActiveDevice({ speeds: next, ranges: ranges });
 
   const savedOnly = () => {
