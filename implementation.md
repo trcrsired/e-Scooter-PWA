@@ -111,3 +111,25 @@ session key = `md5(login_key[0:6] + srand)`), i.e. exactly the scheme used by
 that uses the "secure V2" scheme (security modes 11–16, as in
 `../TuyaOpen/src/tuya_cloud_service/ble/`) is not implemented; this scooter does
 not need it.
+
+## Capturing the official app (HCI snoop)
+
+On this scooter a v4 DP write is **acknowledged but not applied** (the device
+echoes the datapoint back with code `0x0027` while the periodic report keeps the
+old value). To learn what the official Tuya app does differently, record its
+Bluetooth traffic and compare bytes:
+
+1. Phone → Developer options → enable **Bluetooth HCI snoop log**; toggle
+   Bluetooth off/on.
+2. Open the official app, connect, lock/unlock (and change gear), then close it.
+3. Pull the log — either
+   `adb pull /data/misc/bluetooth/logs/btsnoop_hci.log` (needs root), or take a
+   bug report (`adb bugreport bugreport.zip`) and extract
+   `FS/data/misc/bluetooth/logs/btsnoop_hci.log`.
+4. Decode it: `python3 tools/btsnoop_att.py btsnoop_hci.log` lists every ATT
+   Write/Notify value in order (`>` = app→scooter, `<` = scooter→app).
+
+The GATT payloads are the *encrypted* Tuya frames (`flag | iv(16) | AES-CBC`),
+but the framing is recoverable: our session key is `md5(local_key[:6] + srand)`
+and this scooter's `local_key` is empty, so the plaintext can be decrypted from
+the `srand` in the device-info response.
