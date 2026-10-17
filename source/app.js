@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.7";
+const APP_VERSION = "0.7.8";
 
 // -------------------------
 // 1. Localization dictionary
@@ -1124,9 +1124,9 @@ function onDp(dp) {
 // 8b. Ride view: GPS speed, units, scooter read-outs, voice
 // -------------------------
 const UNITS = {
-  kmh: { speed: 1, speedLabel: "km/h", dist: 0.001, distLabel: "km", distDec: 2 },
-  mph: { speed: 0.621371, speedLabel: "mph", dist: 0.000621371, distLabel: "mi", distDec: 2 },
-  ms: { speed: 0.277778, speedLabel: "m/s", dist: 1, distLabel: "m", distDec: 1 },
+  kmh: { speed: 1, speedLabel: "km/h", dist: 0.001, distLabel: "km", distDec: 2, speak: { en: "km per h", zh: "\u516c\u91cc\u6bcf\u5c0f\u65f6" } },
+  mph: { speed: 0.621371, speedLabel: "mph", dist: 0.000621371, distLabel: "mi", distDec: 2, speak: { en: "miles per h", zh: "\u82f1\u91cc\u6bcf\u5c0f\u65f6" } },
+  ms: { speed: 0.277778, speedLabel: "m/s", dist: 1, distLabel: "m", distDec: 1, speak: { en: "m per s", zh: "\u7c73\u6bcf\u79d2" } },
 };
 const LS_UNIT = "escooter.unit";
 let unit = localStorage.getItem(LS_UNIT) || "kmh";
@@ -1425,7 +1425,8 @@ const Announce = {
     this.count++;
     const U = UNITS[unit];
     const v = Math.round(Geo.speedKmh * U.speed);
-    const text = v + " " + U.speedLabel;   // keep it as short as possible
+    const spoken = (U.speak && (U.speak[lang] || U.speak.en)) || U.speedLabel;
+    const text = v + " " + spoken;   // "22 km per h" reads naturally out loud
     log("tts " + this.count + ": " + text);
     try {
       window.speechSynthesis.cancel();

@@ -1,89 +1,70 @@
 # E-Scooter-PWA
-a GPLv3 free software of PWA for e-scooter
 
-- `source/` — the PWA itself; serve this directory (`python3 -m http.server`)
-  - `tuya_ble.js` — the Tuya BLE (central/app side) protocol: GATT transport
-    framing, CRC16, AES-128-CBC, the device-info/pair handshake and datapoint
-    encode/decode, for both generations (v3 `2b10`/`2b11`, v4 `0xfd50`).
-    Ported from the `tuya_ble` / `ha_tuya_ble` / `tuya_eboard` references.
-  - `app.js` — UI, credential storage, CBC wrapper over the wasm crypto, and
-    auto-generated controls from an imported datapoint spec.
-  - `tuya_crypto.wasm` — MD5 + AES-128 (ECB primitive; CBC is built in JS).
-  - `sw.js` — service worker (offline cache). **Bump `SW_VERSION` at the top
-    every time this file changes**; a new version string invalidates the old
-    cache so the installed PWA updates.
-  - `sw-register.js` — registers the service worker and reloads once a new
-    version takes over.
-- `cpp/` — `tuya_crypto.cpp`, built to `source/tuya_crypto.wasm` with
-  clang + fast_io (see comment in the file)
-- `tools/` — `fetch_keys.py` pulls device credentials from Tuya OpenAPI
-- `how-it-works.md` — protocol analysis notes
+A **GPLv3** free-software Progressive Web App (PWA) that talks directly to a
+**Tuya BLE electric scooter** from the browser — no cloud account, no server, no
+vendor app. Your credentials and data stay on your device.
 
-## Usage
+The goal: ride with a phone mounted on the handlebars and get a clean
+speedometer, spoken speed call-outs, a speed warning, and a way to switch ride
+mode — while still having a raw "Debug" view when you want to poke at the
+scooter's datapoints.
+
+## What it does
+
+- **Ride dashboard** — a big GPS-speed hero with trip / max / average / elapsed
+  time, unit toggle (**km/h · mph · m/s**) and live scooter read-outs (battery,
+  voltage, temperature).
+- **Voice announcements** — optional spoken speed every *N* seconds, with a
+  choice of any speech voice the browser offers.
+- **Speed warning** — flash/vibrate/toast when you go faster than a limit you
+  set.
+- **Ride-mode switch** — 🚶 Walk / 🍃 Eco / 🛴 D / ⚡ S, straight from the main UI.
+- **Debug view** — the raw datapoint controls, a manual datapoint sender and a
+  diagnostics log.
+- **Multiple scooters** — keep a list of profiles and switch between them in the
+  UI.
+
+## Why
+
+Tuya scooters are normally only controllable through the vendor app and the
+Tuya cloud. This project instead speaks the local **BLE protocol** from the
+browser (Web Bluetooth), so it works offline, keeps your `local_key` in
+`localStorage`, and can show you the data the official app hides.
+
+It was written for a Tuya BLE **v4** scooter (YFS-Z1 / AOVO class), but it also
+implements the older **v3** GATT generation.
+
+## Quick start
 
 ```
 cd source && python3 -m http.server 8080      # serve the PWA
 ```
 
-Open it from a secure context (localhost, `adb reverse`, or HTTPS), click
-**Connect to scooter**, and pick the device. Enter `local_key`, `device_id` and
-`uuid` in Settings — or use **Load JSON config** there to import a Tuya device
-JSON (or the `keys.json` produced by `tools/fetch_keys.py`). If that file also
-contains the datapoint `functions`/`status` spec, the writable/read-only tiles
-are built from it. Sending is **armed by default**; each send still asks for
-confirmation, and you can turn sending off in Debug.
+Web Bluetooth needs a **secure context** — `localhost`, an `adb reverse` tunnel,
+or HTTPS. Then:
 
-Credentials and the spec are imported deliberately through the UI; the app no
-longer fetches anything from the server on its own.
+1. Open the page in Chrome/Edge on Android or desktop.
+2. Tap **Connect to scooter** and pick your scooter.
+3. Open **Settings → Credential** and either **load your scooter's JSON** from
+   the Tuya IoT platform (<https://iot.tuya.com/> — there's a step-by-step guide
+   in the app) or enter `local_key` / `device_id` / `uuid` by hand.
 
-## Screens
-
-The main area has two tabs:
-
-- **Ride** — a speed dashboard. A big hero shows your *GPS* speed (from the
-  browser's `navigator.geolocation`, Haversine distance + device doppler speed,
-  exponentially smoothed) with trip / max / average / elapsed time. Pick the
-  display unit (**km/h**, **mph** or **m/s**). Tracking is manual: press
-  **Start tracking**. The scooter's own read-outs (battery, voltage, temp) are
-  shown as cards. A **mode selector** (🚶 Walk / 🍃 Eco / 🛴 行驶 / ⚡ 运动) shows
-  the current ride mode from the gear datapoint (dp 15) and lets you switch it
-  (through the usual confirmation gate). An optional **speed announcement**
-  toggle speaks the current speed with the Web Speech API every *N* seconds
-  (default 30) for at most *M* times (`0` = unlimited) — the phrase is kept as
-  short as possible (just the number and unit). A separate **speed warning**
-  toggle (with a threshold in the current unit) flashes the hero red, vibrates
-  and toasts when you ride faster than the limit.
-- **Debug** — the raw datapoint UI: the safety note, the auto-generated
-  spec-driven controls, the manual datapoint sender and the diagnostics log.
-
-**Settings** (the ⚙ button) is a full-screen view with sections:
-- **Language** — interface language (English / 中文) and which speech voice the
-  announcements use. The list shows every voice the browser exposes; picking one
-  also switches the announcement language to match the voice.
-- **Scooter** — manage several scooters entirely in the UI: a picker to switch
-  the active one, **Add** to create another, **Remove** to delete one, and the
-  scooter's name (shown in the app bar). Importing a JSON merges into this list,
-  and the credentials below always apply to the selected scooter.
-- **Credential** — importing your scooter's JSON from the Tuya IoT platform is
-  the preferred way (there is a short step-by-step guide and a link to
-  <https://iot.tuya.com/> right there). Manual `local_key` / `device_id` /
-  `uuid` entry is still available as a fallback.
+Sending commands is armed by default, and every send still asks for
+confirmation.
 
 ## Safety
 
-Sending is **armed by default** (remembered across sessions); each send still
-shows a confirmation, and you can turn sending off in Debug — the library then
-refuses datapoint writes while `allowWrites` is false. This scooter is Tuya BLE
-**v4**; because neither reference project sends v4 datapoints, verify a harmless
-datapoint (e.g. the light) before trusting any DP that can affect motion.
+Confirmed commands really go to the scooter and **can unlock, move or change the
+speed** of a vehicle. Only send datapoints you understand, and disconnect first
+when in doubt. See the notice in the Debug view.
 
-## Protocol note
+## Documentation
 
-`tuya_ble.js` implements the *classic* Tuya BLE handshake (security flags 4/5,
-session key = `md5(login_key[0:6] + srand)`), i.e. exactly the scheme used by
-`ha_tuya_ble`/`tuya_ble`. Two GATT generations are auto-detected: **v3**
-(`0xa201`, `2b10`/`2b11`, 1-byte DP length) and **v4** (`0xfd50`, chars
-`…0001`/`…0002`, device-info `[0x00,0xF3]`, 2-byte DP length). Newer firmware
-that uses the "secure V2" scheme (security modes 11–16, as in
-`../TuyaOpen/src/tuya_cloud_service/ble/`) is not implemented; this scooter does
-not need it.
+- [`implementation.md`](implementation.md) — what's in each directory, features
+  in detail, and how to run/develop it.
+- [`how-it-works.md`](how-it-works.md) — the reverse-engineered Tuya BLE
+  protocol notes.
+
+## License
+
+GPLv3 — see [`LICENSE`](LICENSE).
