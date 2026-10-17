@@ -1,4 +1,10 @@
 // -------------------------
+// 0. Version — the single source of truth for "is the browser running the
+//    latest build?". Bump this on EVERY change; it is shown in the app bar.
+// -------------------------
+const APP_VERSION = "0.4.0";
+
+// -------------------------
 // 1. Localization dictionary
 // -------------------------
 const i18n = {
@@ -155,6 +161,7 @@ $("confirmTitle").textContent = t.confirm_title;
 $("confirmCancelBtn").textContent = t.confirm_cancel;
 $("confirmSendBtn").textContent = t.confirm_send;
 document.documentElement.lang = lang;
+$("version").textContent = "v" + APP_VERSION;
 
 // -------------------------
 // 4. Helpers
@@ -827,6 +834,7 @@ $("copyLogBtn").onclick = async () => {
 // 10. Boot
 // -------------------------
 (async function boot() {
+  log("app v" + APP_VERSION);
   const ok = await Crypto.load();
   const dev = await loadKeysFile();
   if (dev) {

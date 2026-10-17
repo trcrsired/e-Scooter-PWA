@@ -107,6 +107,18 @@ body {
 }
 .icon-btn:active { background: var(--card-2); }
 
+/* version badge in the app bar */
+.version {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
 /* ---------------- layout ---------------- */
 main {
   flex: 1;
