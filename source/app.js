@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.6.0";
+const APP_VERSION = "0.6.1";
 
 // -------------------------
 // 1. Localization dictionary
@@ -169,9 +169,9 @@ const i18n = {
     volt: "电压",
     temp: "温度",
     mode_walk: "步行",
-    mode_eco: "经济",
-    mode_d: "D",
-    mode_s: "S",
+    mode_eco: "节能",
+    mode_d: "行驶",
+    mode_s: "运行",
     mode_unknown: v => `模式 ${v}`,
     import_label: "加载 JSON 配置",
     import_ok: name => `已加载 ${name}`,
