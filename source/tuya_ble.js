@@ -239,29 +239,53 @@
 
   /* ---- GATT ---- */
   TuyaBLE.prototype.discover = async function () {
+    const sh = u => {
+      u = String(u).toLowerCase();
+      const m = u.match(/^0000([0-9a-f]{4})-0000-1000-8000-00805f9b34fb$/);
+      return m ? "0x" + m[1] : u;
+    };
+
     let services = [];
     try { services = await this.server.getPrimaryServices(); }
     catch (e) { this.log("getPrimaryServices failed: " + e.message); }
+    this.log("services seen (" + services.length + "): " +
+      (services.map(s => sh(s.uuid)).join(", ") || "(none)"));
 
-    let writeChar = null, notifyChar = null, genericWrite = [], genericNotify = [];
+    let writeChar = null, notifyChar = null;
+    const pairs = [];
     for (const service of services) {
       let chars = [];
       try { chars = await service.getCharacteristics(); }
-      catch (e) { this.log("  (" + service.uuid + "): " + e.message); continue; }
+      catch (e) { this.log("  (" + sh(service.uuid) + "): " + e.message); continue; }
+      const sw = [], sn = [];
       for (const c of chars) {
         const u = c.uuid.toLowerCase();
-        this.log("  char " + u + " [" +
-          Object.entries(c.properties).filter(([, v]) => v).map(([k]) => k).join(",") + "]");
+        this.log("  char " + sh(u) + " [" +
+          Object.keys(c.properties).filter(k => c.properties[k]).join(",") + "]");
         if (u === WRITE_UUID) writeChar = c;
         else if (u === NOTIFY_UUID) notifyChar = c;
-        if (c.properties.write || c.properties.writeWithoutResponse) genericWrite.push(c);
-        if (c.properties.notify || c.properties.indicate) genericNotify.push(c);
+        if (c.properties.write || c.properties.writeWithoutResponse) sw.push(c);
+        if (c.properties.notify || c.properties.indicate) sn.push(c);
+      }
+      if (sw.length || sn.length) pairs.push({ uuid: service.uuid, sw, sn });
+    }
+
+    if (!writeChar || !notifyChar) {
+      // Prefer a service whose UUID looks like Tuya (a201/1910); otherwise,
+      // if exactly one service exposes both a writable and a notifiable
+      // characteristic, use that pair.
+      const tuya = pairs.find(p => /a201|1910/.test(String(p.uuid).toLowerCase()));
+      const both = pairs.filter(p => p.sw.length && p.sn.length);
+      const pick = tuya || (both.length === 1 ? both[0] : null);
+      if (pick) {
+        if (!writeChar) writeChar = pick.sw[0];
+        if (!notifyChar) notifyChar = pick.sn[0];
+        this.log("fallback: using service " + sh(pick.uuid));
+      } else if (both.length > 1) {
+        this.log("ambiguous: " + both.length +
+          " services expose write+notify and none matched a Tuya UUID");
       }
     }
-    // Prefer the well-known Tuya characteristics; fall back to a single
-    // unmistakable candidate if the UUIDs differ on this firmware.
-    if (!writeChar && genericWrite.length === 1) writeChar = genericWrite[0];
-    if (!notifyChar && genericNotify.length === 1) notifyChar = genericNotify[0];
     return { writeChar, notifyChar, services };
   };
 
@@ -273,7 +297,9 @@
 
     const { writeChar, notifyChar } = await this.discover();
     if (!writeChar || !notifyChar) {
-      throw new Error("Tuya BLE characteristics not found (need write 2b11 + notify 2b10)");
+      throw new Error("Tuya BLE characteristics not found (write=" +
+        (writeChar ? writeChar.uuid : "none") + ", notify=" +
+        (notifyChar ? notifyChar.uuid : "none") + ") — open Diagnostics and copy the log");
     }
     this.writeChar = writeChar;
     this.notifyChar = notifyChar;
