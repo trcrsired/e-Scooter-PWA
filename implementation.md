@@ -69,12 +69,12 @@ The main area has two tabs:
   button (re-asks the scooter to report every datapoint, so you can see whether
   a write was accepted) and the diagnostics log (every line is prefixed with an
   ISO 8601 timestamp, e.g. `2026-10-17T20:31:05.123Z`). A v4 DP write is
-  acknowledged by the scooter with a `0x27` echo, which the app logs as an
-  `ack dp …` line. That echo only means the frame was received — it is *not*
-  proof the scooter acted on it, so it is deliberately kept out of the live
-  datapoint state. After a gear **or lock** write the app re-queries the scooter
-  and compares the real read-back (`dp 15` / `dp 1`) against what it asked for,
-  logging (and toasting) whether the scooter actually obeyed.
+  acknowledged by the scooter with a `0x27` response that echoes the request's
+  5-byte header and appends a **status byte** (`0x00` = accepted, non-zero =
+  rejected), logged as `write ack: … status=0 (accepted)`. After a gear **or
+  lock** write the app re-queries the scooter and compares the real read-back
+  (`dp 15` / `dp 1`) against what it asked for, logging (and toasting) whether
+  the scooter actually obeyed.
 
 **Settings** (the ⚙ button) is a full-screen view with sections:
 - **Language** — interface language (English / 中文) and which speech voice the
@@ -88,10 +88,16 @@ The main area has two tabs:
   app offers (once) to save the connected device's advertised name as the
   filter. Importing a JSON merges into this list, and the credentials below
   always apply to the selected scooter.
+- **Speed limits** — the Eco / D / S maximum speed (dp 101 / 102 / 103, km/h;
+  Eco 5–15, D 10–24, S 20–31). Stored per profile; sending goes through the usual
+  confirmation gate, and only the values that changed are written.
 - **Credential** — importing your scooter's JSON from the Tuya IoT platform is
   the preferred way (there is a short step-by-step guide and a link to
   <https://iot.tuya.com/> right there). Manual `local_key` / `device_id` /
-  `uuid` entry is still available as a fallback.
+  `uuid` entry is still available as a fallback. **Export credentials & settings**
+  downloads a JSON backup of every scooter profile (credentials, name filter,
+  speed limits) plus the app settings (language, unit, speed warning, voice,
+  announcement timings, arm state); importing that file restores both.
 
 ## Safety
 

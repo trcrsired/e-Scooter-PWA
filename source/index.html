@@ -170,6 +170,25 @@
         <span id="btNameNote" class="saved-note"></span>
       </div>
 
+      <h3 id="speedTitle" class="sheet-section-title"></h3>
+      <div class="tile-meta" id="speedNote"></div>
+      <div class="field">
+        <label id="speedEcoLabel" for="speedEco"></label>
+        <input id="speedEco" type="number" min="5" max="15" step="1" inputmode="numeric" placeholder="5–15">
+      </div>
+      <div class="field">
+        <label id="speedDLabel" for="speedD"></label>
+        <input id="speedD" type="number" min="10" max="24" step="1" inputmode="numeric" placeholder="10–24">
+      </div>
+      <div class="field">
+        <label id="speedSLabel" for="speedS"></label>
+        <input id="speedS" type="number" min="20" max="31" step="1" inputmode="numeric" placeholder="20–31">
+      </div>
+      <div class="sheet-actions">
+        <button id="speedSaveBtn" class="primary" type="button"></button>
+        <span id="speedStatus" class="saved-note"></span>
+      </div>
+
       <h3 id="credTitle" class="sheet-section-title"></h3>
       <p class="sheet-hint small">
         <span id="credHintText"></span>
@@ -179,6 +198,14 @@
         <label id="importLabel" for="importInput"></label>
         <input id="importInput" type="file" accept="*/*">
         <span id="importStatus" class="saved-note"></span>
+      </div>
+      <div class="field">
+        <label id="exportLabel" for="exportBtn"></label>
+        <div class="inline">
+          <button id="exportBtn" class="ghost" type="button"></button>
+        </div>
+        <div class="tile-meta" id="exportNote"></div>
+        <span id="exportStatus" class="saved-note"></span>
       </div>
       <details class="help">
         <summary id="credHelpSummary"></summary>

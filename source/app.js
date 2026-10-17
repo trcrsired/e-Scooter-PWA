@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.16";
+const APP_VERSION = "0.7.17";
 
 // -------------------------
 // 1. Localization dictionary
@@ -136,6 +136,18 @@ const i18n = {
     warn_off: "Speed warning off",
     warn_at: (v, u) => `Warn above ${v} ${u}`,
     warn_over: (v, u) => `\u26a0 Too fast \u2014 ${v} ${u}`,
+    speed_title: "Speed limits",
+    speed_note: "Maximum speed per riding mode, written to datapoints 101/102/103 (km/h).",
+    speed_eco: "Eco \u2014 dp 101 (5\u201315 km/h)",
+    speed_d: "D \u2014 dp 102 (10\u201324 km/h)",
+    speed_s: "S \u2014 dp 103 (20\u201331 km/h)",
+    speed_save: "Send speed limits",
+    speed_sent: "Speed limits sent",
+    speed_saved: "Speed limits saved",
+    export_label: "Export credentials & settings",
+    export_btn: "Download backup JSON",
+    export_note: "Saves every scooter (including its local key) and your app settings to one file. Keep it private.",
+    export_ok: "Backup downloaded",
   },
   zh: {
     title: "电动滑板车",
@@ -265,6 +277,18 @@ const i18n = {
     warn_off: "速度警告已关闭",
     warn_at: (v, u) => `超过 ${v} ${u} 时警告`,
     warn_over: (v, u) => `\u26a0 超速 —— ${v} ${u}`,
+    speed_title: "速度限制",
+    speed_note: "各骑行模式下的最高速度，写入数据点 101/102/103（km/h）。",
+    speed_eco: "节能 \u2014 dp 101（5\u201315 km/h）",
+    speed_d: "行驶 \u2014 dp 102（10\u201324 km/h）",
+    speed_s: "运动 \u2014 dp 103（20\u201331 km/h）",
+    speed_save: "发送速度限制",
+    speed_sent: "速度限制已发送",
+    speed_saved: "速度限制已保存",
+    export_label: "导出凭据与设置",
+    export_btn: "下载备份 JSON",
+    export_note: "将全部滑板车（含本地密钥）与应用设置保存为一个文件，请妥善保管。",
+    export_ok: "备份已下载",
   }
 };
 
@@ -312,6 +336,12 @@ function applyStatic() {
   $("deviceRemoveBtn").textContent = t.device_remove;
   $("btNameLabel").textContent = t.bt_name_label;
   $("btNameNote").textContent = t.bt_name_note;
+  $("speedTitle").textContent = t.speed_title;
+  $("speedNote").textContent = t.speed_note;
+  $("speedEcoLabel").textContent = t.speed_eco;
+  $("speedDLabel").textContent = t.speed_d;
+  $("speedSLabel").textContent = t.speed_s;
+  $("speedSaveBtn").textContent = t.speed_save;
   $("credTitle").textContent = t.credential_title;
   $("credHintText").textContent = t.cred_hint;
   $("credHelpSummary").textContent = t.cred_help;
@@ -327,6 +357,9 @@ function applyStatic() {
   $("devIdLabel").textContent = t.devid_label;
   $("uuidLabel").textContent = t.uuid_label;
   $("importLabel").textContent = t.import_label;
+  $("exportLabel").textContent = t.export_label;
+  $("exportBtn").textContent = t.export_btn;
+  $("exportNote").textContent = t.export_note;
   $("saveKeysBtn").textContent = t.save;
   $("diagSummary").textContent = t.diagnostics;
   $("clearLogBtn").textContent = t.clear_log;
@@ -599,6 +632,7 @@ function loadDeviceIntoForm(dev) {
   $("deviceNameInput").value = dev.device_name || "";
   $("btNameInput").value = dev.bt_name || "";
   $("deviceName").textContent = dev.device_name || "";
+  loadSpeedInputs(dev);
 }
 
 // Pick the scooter at index i as the active one and load it everywhere.
@@ -643,6 +677,8 @@ function mergeImported(dev, i) {
   };
   if (dev.functions) out.functions = dev.functions;
   if (dev.status) out.status = dev.status;
+  if (dev.bt_name) out.bt_name = dev.bt_name;
+  if (dev.speeds && typeof dev.speeds === "object") out.speeds = dev.speeds;
   return out;
 }
 
@@ -672,6 +708,10 @@ function importConfig(data) {
   importStatusEl.classList.remove("error");
   setTimeout(() => { importStatusEl.textContent = ""; }, 3000);
   log("imported " + list.length + " scooter(s); list now has " + importedDevices.length);
+  if (data && typeof data === "object" && !Array.isArray(data) && data.settings) {
+    applySettings(data.settings);
+    log("restored app settings from the backup");
+  }
   if (!keyInput.value) log("note: no local_key for this scooter — enter it under Credential before connecting");
 }
 
@@ -713,6 +753,115 @@ $("btNameInput").addEventListener("change", () => updateActiveDevice({ bt_name: 
 $("keyInput").addEventListener("change", () => updateActiveDevice({ local_key: keyInput.value.trim() }));
 $("devIdInput").addEventListener("change", () => updateActiveDevice({ device_id: devIdInput.value.trim() }));
 $("uuidInput").addEventListener("change", () => updateActiveDevice({ uuid: uuidInput.value.trim() }));
+
+// ---- speed limits (dp 101/102/103 = Eco / D / S max speed, km/h) ----
+// [key, dp id, min, max]
+const SPEED_DPS = [["eco", 101, 5, 15], ["d", 102, 10, 24], ["s", 103, 20, 31]];
+function speedInputEl(key) { return $("speed" + key.charAt(0).toUpperCase() + key.slice(1)); }
+
+function loadSpeedInputs(dev) {
+  const s = (dev && dev.speeds) || {};
+  for (const [key] of SPEED_DPS) {
+    const kmh = Number(s[key]);
+    speedInputEl(key).value = Number.isFinite(kmh) && kmh > 0 ? String(Math.round(kmh)) : "";
+  }
+}
+
+$("speedSaveBtn").addEventListener("click", async () => {
+  if (!tuya) { toast(t.status_disconnected); return; }
+  if (!armed) { toast(t.arm_needed); return; }
+  const dev = importedDevices[activeIndex] || {};
+  const prev = dev.speeds || {};
+  const next = Object.assign({}, prev);
+  for (const [key, , min, max] of SPEED_DPS) {
+    const raw = speedInputEl(key).value.trim();
+    if (raw === "") continue;
+    let v = Math.round(Number(raw));
+    if (!Number.isFinite(v)) continue;
+    v = Math.max(min, Math.min(max, v));
+    speedInputEl(key).value = String(v);
+    next[key] = v;
+  }
+  let sent = 0;
+  for (const [key, dpId] of SPEED_DPS) {
+    if (next[key] === undefined || next[key] === prev[key]) continue;
+    const name = key === "eco" ? t.mode_eco : key === "d" ? t.mode_d : t.mode_s;
+    const ok = await askConfirm("dp " + dpId, name + " \u2192 " + next[key] + " km/h");
+    if (!ok) continue;
+    log("\u2192 dp " + dpId + " (" + (DT_NAMES[DT.VALUE] || "VALUE") + ") = " + next[key] + " km/h");
+    try { tuya.sendDp(dpId, DT.VALUE, next[key]); sent++; }
+    catch (e) { log("send failed: " + (e && e.message ? e.message : e)); }
+  }
+  updateActiveDevice({ speeds: next });
+  $("speedStatus").textContent = sent ? t.speed_sent : t.speed_saved;
+  setTimeout(() => { $("speedStatus").textContent = ""; }, 2500);
+  if (sent) setTimeout(() => { if (tuya) tuya.requestStatus(); }, 600);
+});
+
+// ---- export credentials + settings as a JSON backup ----
+function buildExport() {
+  let tts = {};
+  try { tts = JSON.parse(localStorage.getItem(LS_TTS) || "{}"); } catch (_) {}
+  return {
+    app: "e-Scooter-PWA",
+    version: APP_VERSION,
+    exported_at: new Date().toISOString(),
+    devices: importedDevices.map(d => Object.assign({}, d)),
+    settings: {
+      lang: lang,
+      unit: unit,
+      armed: armed,
+      warn: { on: Warn.on, kmh: Warn.kmh },
+      tts: tts,
+      voice: localStorage.getItem(LS_VOICE) || "",
+    },
+  };
+}
+
+$("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(buildExport(), null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "escooter-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  $("exportStatus").textContent = t.export_ok;
+  setTimeout(() => { $("exportStatus").textContent = ""; }, 2500);
+  log("exported " + importedDevices.length + " scooter(s) + settings");
+});
+
+// Restore app settings saved by buildExport() (called when importing a backup).
+function applySettings(s) {
+  if (!s || typeof s !== "object") return;
+  if (s.lang && i18n[s.lang] && s.lang !== lang) setLang(s.lang);
+  if (s.unit && UNITS[s.unit]) setUnit(s.unit);
+  if (typeof s.armed === "boolean") {
+    armed = s.armed;
+    localStorage.setItem("escooter.armed", armed ? "1" : "0");
+    if (tuya) tuya.allowWrites = armed;
+    buildControls(deviceSpec);
+  }
+  if (s.warn && typeof s.warn === "object") {
+    Warn.on = !!s.warn.on;
+    if (Number.isFinite(Number(s.warn.kmh))) Warn.kmh = Number(s.warn.kmh);
+    localStorage.setItem(LS_WARN, Warn.on ? "1" : "0");
+    localStorage.setItem(LS_WARNKMH, String(Warn.kmh));
+    Warn.was = false;
+    updateWarnUi();
+  }
+  if (s.tts && typeof s.tts === "object") {
+    localStorage.setItem(LS_TTS, JSON.stringify(s.tts));
+    if (s.tts.every) ttsEvery.value = s.tts.every;
+    if (s.tts.max !== undefined) ttsMax.value = s.tts.max;
+  }
+  if (s.voice) {
+    localStorage.setItem(LS_VOICE, s.voice);
+    populateVoices();
+  }
+}
 
 // Restore the saved scooter list from this browser.
 function restoreDevices() {

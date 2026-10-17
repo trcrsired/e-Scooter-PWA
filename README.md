@@ -19,11 +19,15 @@ scooter's datapoints.
 - **Speed warning** — flash/vibrate/toast when you go faster than a limit you
   set.
 - **Ride-mode switch** — 🚶 Walk / 🍃 Eco / 🛴 D / ⚡ S, straight from the main UI.
+- **Speed limits** — set the Eco / D / S maximum speed (km/h) in Settings; written
+  to datapoints 101 / 102 / 103.
 - **Lock toggle** — 🔒 Locked / 🔓 Unlocked (dp 1) right on the Ride dashboard.
 - **Debug view** — the raw datapoint controls, a manual datapoint sender and a
   diagnostics log.
 - **Multiple scooters** — keep a list of profiles and switch between them in the
   UI; each profile can filter the Bluetooth chooser by device-name prefix.
+- **Backup** — export every scooter (credentials, name filter, speed limits) plus
+  your app settings to one JSON file, and import it back on another device.
 
 ## Why
 
