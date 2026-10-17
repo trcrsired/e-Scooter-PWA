@@ -82,9 +82,8 @@ to hide it again; the choice is remembered in `localStorage`):
   An optional **speed announcement**
   toggle speaks the current speed with the Web Speech API every *N* seconds
   (default 30). It is **unlimited by default** — leave the *times* box empty
-  (shown as `∞`) to loop forever, or set a count. It stays **silent below 5 km/h**
-  (so it never reads “0” at a stop). Spoken naturally, e.g. “22 kilometers per
-  hour”. A separate **speed warning**
+  (shown as `∞`) to loop forever, or set a count. Spoken naturally, e.g. “22
+  kilometers per hour”. A separate **speed warning**
   toggle (with a threshold in the current unit) flashes the hero red, vibrates
   and toasts when you ride faster than the limit.
 - **Debug** — the raw datapoint UI: the safety note, the auto-generated

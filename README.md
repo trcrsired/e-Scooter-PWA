@@ -20,7 +20,7 @@ scooter's datapoints.
   reported panel speed (dp 2).
 - **Voice announcements** — optional spoken speed every *N* seconds, with a
   choice of any speech voice the browser offers. Unlimited by default (leave the
-  *times* box empty) and it only speaks above 5 km/h.
+  *times* box empty) so it loops forever every *N* seconds.
 - **Speed warning** — flash/vibrate/toast when you go faster than a limit you
   set.
 - **Ride-mode switch** — 🚶 Walk / 🍃 Eco / 🛴 D / ⚡ S, straight from the main UI.

@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.28";
+const APP_VERSION = "0.7.29";
 
 // -------------------------
 // 1. Localization dictionary
@@ -84,7 +84,6 @@ const i18n = {
     announce_title: "Speed announcements",
     every_s: "every (s)",
     times: "times (\u221e)",
-    tts_min_speed: "voice only announces above 5 km/h",
     tts_off: "Voice off",
     tts_on: (n, m) => `Voice on · ${n}s` + (m > 0 ? " × " + m : " · unlimited"),
     tts_unavailable: "Speech synthesis unavailable",
@@ -281,7 +280,6 @@ const i18n = {
     announce_title: "语音播报",
     every_s: "间隔（秒）",
     times: "次数（∞）",
-    tts_min_speed: "仅在高于 5 km/h 时语音播报",
     tts_off: "语音关闭",
     tts_on: (n, m) => `语音开启 · ${n} 秒` + (m > 0 ? " × " + m : " · 不限次数"),
     tts_unavailable: "此环境不支持语音合成",
@@ -509,7 +507,6 @@ function applyStatic() {
   $("announceTitle").textContent = t.announce_title;
   $("lblEvery").textContent = t.every_s;
   $("lblTimes").textContent = t.times;
-  $("ttsHint").textContent = t.tts_min_speed;
   $("warnTitle").textContent = t.warn_title;
   $("lblWarnAbove").textContent = t.warn_above;
   $("langSelect").value = lang;
@@ -2384,9 +2381,6 @@ const Announce = {
     updateTtsState();
   },
   speak() {
-    // Below 5 km/h we stay silent (so it doesn't read "0 km/h" at every
-    // stop); the repeat loop keeps running regardless.
-    if (Geo.speedKmh < 5) { log("tts skipped: below 5 km/h"); return; }
     this.count++;
     const U = UNITS[unit];
     const v = Math.round(Geo.speedKmh * U.speed);
