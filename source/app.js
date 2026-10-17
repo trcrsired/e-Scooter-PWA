@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.14";
+const APP_VERSION = "0.7.15";
 
 // -------------------------
 // 1. Localization dictionary
@@ -100,6 +100,13 @@ const i18n = {
     lock_rejected: v => `Lock not applied (still ${v})`,
     bt_name_label: "Bluetooth name filter",
     bt_name_note: "Only devices whose name starts with this appear in the chooser.",
+    bt_name_prompt_title: "Remember this scooter?",
+    bt_name_prompt_body: (name, cur) => cur
+      ? `Connected to \u201c${name}\u201d, but this profile filters \u201c${cur}\u201d. Use \u201c${name}\u201d instead?`
+      : `Connected to \u201c${name}\u201d. Save it as this profile's Bluetooth name filter so next time the chooser is simpler?`,
+    bt_name_prompt_save: "Save name",
+    bt_name_prompt_skip: "Not now",
+    bt_name_saved: name => `Saved Bluetooth name \u201c${name}\u201d`,
     credential_title: "Credential",
     lang_title: "Language",
     lang_label: "Interface language",
@@ -222,6 +229,13 @@ const i18n = {
     lock_rejected: v => `锁未生效（仍为 ${v}）`,
     bt_name_label: "蓝牙名称过滤",
     bt_name_note: "选择滑板车时，只显示名称以此开头的设备。",
+    bt_name_prompt_title: "记住这台滑板车？",
+    bt_name_prompt_body: (name, cur) => cur
+      ? `已连接设备名为“${name}”，但此配置过滤的是“${cur}”。改用“${name}”吗？`
+      : `已连接到“${name}”。要把它保存为此配置的蓝牙名称过滤吗？这样下次选择更简单。`,
+    bt_name_prompt_save: "保存名称",
+    bt_name_prompt_skip: "暂不",
+    bt_name_saved: name => `已保存蓝牙名称“${name}”`,
     credential_title: "凭据",
     lang_title: "语言",
     lang_label: "界面语言",
@@ -844,6 +858,25 @@ function closeConfirm(result) {
 $("confirmCancelBtn").onclick = () => closeConfirm(false);
 $("confirmSendBtn").onclick = () => closeConfirm(true);
 confirmOverlay.addEventListener("click", e => { if (e.target === confirmOverlay) closeConfirm(false); });
+
+// Generic yes/no prompt that reuses the confirm overlay and restores the
+// command-confirmation labels afterwards (e.g. "remember this Bluetooth name?").
+function askPrompt(title, body, okLabel, cancelLabel) {
+  $("confirmTitle").textContent = title;
+  confirmBody.textContent = body;
+  $("confirmSendBtn").textContent = okLabel || t.confirm_send;
+  $("confirmCancelBtn").textContent = cancelLabel || t.confirm_cancel;
+  confirmOverlay.hidden = false;
+  requestAnimationFrame(() => confirmOverlay.classList.add("open"));
+  return new Promise(resolve => {
+    _confirmResolve = (result) => {
+      $("confirmTitle").textContent = t.confirm_title;
+      $("confirmSendBtn").textContent = t.confirm_send;
+      $("confirmCancelBtn").textContent = t.confirm_cancel;
+      resolve(result);
+    };
+  });
+}
 
 // The ONLY function that writes to the scooter. It requires the arm-switch to
 // be on (tuya.allowWrites), shows a confirmation, and reverts the control if
@@ -1689,6 +1722,28 @@ async function acquireDevice() {
   return navigator.bluetooth.requestDevice(opts);
 }
 
+// After connecting, offer to remember the advertised device name as this
+// profile's Bluetooth name filter, so the next chooser can be narrowed to it.
+async function maybeOfferNameFilter(name) {
+  if (!name) return;
+  const dev = importedDevices[activeIndex];
+  if (!dev) return;
+  const cur = (dev.bt_name || "").trim();
+  if (cur && cur.toLowerCase() === name.toLowerCase()) return;
+  const ok = await askPrompt(
+    t.bt_name_prompt_title,
+    t.bt_name_prompt_body(name, cur),
+    t.bt_name_prompt_save,
+    t.bt_name_prompt_skip
+  );
+  if (ok) {
+    updateActiveDevice({ bt_name: name });
+    $("btNameInput").value = name;
+    toast(t.bt_name_saved(name));
+    log("saved Bluetooth name filter: \u201c" + name + "\u201d");
+  }
+}
+
 connectBtn.onclick = async () => {
   if (tuya) {
     tuya.disconnect();
@@ -1730,6 +1785,7 @@ connectBtn.onclick = async () => {
         setStatus(t.status_connected(device.name || device.id), "is-connected");
         setConnected(true);
         buildControls(deviceSpec); // enable the arm-switch / manual sender now we're connected
+        maybeOfferNameFilter(device.name).catch(() => {});
       },
     });
     tuya.allowWrites = armed; // hard guard in the library mirrors the UI arm-switch

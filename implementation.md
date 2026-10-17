@@ -84,9 +84,10 @@ The main area has two tabs:
   the active one, **Add** to create another, **Remove** to delete one, and the
   scooter's name (shown in the app bar). Each scooter also has a **Bluetooth name
   filter** (e.g. `demo`) which the connect flow uses as a `namePrefix` so the
-  chooser only lists that scooter when several are nearby. Importing a JSON
-  merges into this list, and the credentials below always apply to the selected
-  scooter.
+  chooser only lists that scooter when several are nearby. After connecting, the
+  app offers (once) to save the connected device's advertised name as the
+  filter. Importing a JSON merges into this list, and the credentials below
+  always apply to the selected scooter.
 - **Credential** — importing your scooter's JSON from the Tuya IoT platform is
   the preferred way (there is a short step-by-step guide and a link to
   <https://iot.tuya.com/> right there). Manual `local_key` / `device_id` /
