@@ -212,6 +212,10 @@
     this.keySession = null;  // md5(login_key + srand)  -> security flag 5
     this.keyAuth = null;     // device auth_key         -> security flag 1
     this.paired = false;
+    // Datapoint writes are the ONLY BLE messages that can change the
+    // scooter's behaviour. Until they are explicitly turned on, they are
+    // refused at the source rather than silently transmitted.
+    this.allowWrites = false;
     this.pending = new Map();
     this._opLock = Promise.resolve();
 
@@ -414,6 +418,7 @@
   TuyaBLE.prototype._onNotify = function (event) {
     const value = event.target.value;
     const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    this.log("rx raw [" + bytes.length + "]: " + hex(bytes));
     try { this._reassemble(bytes); }
     catch (e) { this.log("rx error: " + e.message); }
   };
@@ -493,6 +498,7 @@
   TuyaBLE.prototype._handle = function (seq, responseTo, code, data) {
     switch (code) {
       case CODE.DEVICE_INFO:
+        this.log("device info data: " + hex(data));
         if (data.length >= 14) {
           this.protocolVersion = data[2] || 2;
           this.flags = data[4];
@@ -595,6 +601,11 @@
   /* ---- datapoints ---- */
   TuyaBLE.prototype.sendDps = function (dps) {
     // dps: [{ id, type, value }]
+    if (!this.allowWrites) {
+      this.log("blocked DP write (observe-only): " +
+        dps.map(function (d) { return "dp " + d.id + " = " + d.value; }).join(", "));
+      return Promise.resolve();
+    }
     const raw = encodeKlv(dps, 1);
     return this.send(CODE.DPS, raw, { wait: false }).catch(() => {});
   };

@@ -229,6 +229,13 @@ button { font-family: inherit; }
   margin-bottom: 4px;
   overflow-wrap: anywhere;
 }
+.tile .tile-meta {
+  font-size: 0.66rem;
+  color: var(--muted);
+  opacity: 0.8;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
 .tile .tile-value {
   font-size: 1.15rem;
   font-weight: 600;
@@ -390,6 +397,18 @@ select { cursor: pointer; }
 }
 
 .muted { color: var(--muted); }
+
+.notice {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--warn);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
 .empty {
   padding: 22px 16px;
   text-align: center;

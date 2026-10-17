@@ -14,6 +14,10 @@ const i18n = {
     status_connected: name => `Connected to ${name}`,
     status_disconnected: "Disconnected",
     failed: err => `Failed: ${err}`,
+    status_cancelled: "No device selected — tap Connect and choose your scooter. Wake it up and make sure it isn't already connected to another phone or the official app.",
+    bt_off: "Bluetooth is off, unavailable, or access was denied. Turn Bluetooth on and allow the browser access, then try again.",
+    bt_unsupported: "Web Bluetooth isn't available here. Use Chrome/Edge on Android or desktop, served over HTTPS (or localhost).",
+    bt_gesture: "The browser blocked the device chooser. Tap Connect again.",
     settings: "Settings",
     settings_hint: "Credentials come from the Tuya cloud. Serving keys.json next to the app loads them automatically, or enter them here (stored only in this browser).",
     key_label: "Local key",
@@ -28,11 +32,15 @@ const i18n = {
     wasm_missing: "tuya_crypto.wasm not found — run the build in cpp/",
     section_controls: "Controls",
     section_status: "Status",
+    section_datapoints: "Datapoints (read-only)",
+    observe_notice: "Observe-only mode: this app will not send any commands to the scooter. It only authenticates and displays the datapoints the scooter reports.",
     controls_empty: "Connect to the scooter to load its controls.",
     read_only: "read-only",
     send: "Send",
     diagnostics: "Diagnostics",
     clear_log: "Clear log",
+    copy_log: "Copy log",
+    copied: "Copied",
     on: "On",
     off: "Off",
   },
@@ -48,6 +56,10 @@ const i18n = {
     status_connected: name => `已连接到 ${name}`,
     status_disconnected: "已断开",
     failed: err => `失败：${err}`,
+    status_cancelled: "未选择设备 —— 请点击连接并选择你的滑板车。请唤醒它，并确认它未连接到其他手机或官方 App。",
+    bt_off: "蓝牙已关闭、不可用，或权限被拒绝。请打开蓝牙并允许浏览器访问后重试。",
+    bt_unsupported: "此环境不支持 Web 蓝牙。请使用 Android 或桌面版 Chrome/Edge，并通过 HTTPS（或 localhost）访问。",
+    bt_gesture: "浏览器阻止了设备选择器。请再次点击连接。",
     settings: "设置",
     settings_hint: "凭据来自涂鸦云。将 keys.json 与应用一起提供会自动加载，也可在此手动填写（仅保存在本浏览器）。",
     key_label: "本地密钥",
@@ -62,11 +74,15 @@ const i18n = {
     wasm_missing: "未找到 tuya_crypto.wasm —— 请在 cpp/ 中构建",
     section_controls: "控制",
     section_status: "状态",
+    section_datapoints: "数据点（只读）",
+    observe_notice: "仅观察模式：本应用不会向滑板车发送任何指令，只进行认证并显示滑板车上报的数据点。",
     controls_empty: "连接滑板车后即可加载控制项。",
     read_only: "只读",
     send: "发送",
     diagnostics: "诊断",
     clear_log: "清空日志",
+    copy_log: "复制日志",
+    copied: "已复制",
     on: "开",
     off: "关",
   }
@@ -104,6 +120,8 @@ $("uuidLabel").textContent = t.uuid_label;
 $("saveKeysBtn").textContent = t.save;
 $("diagSummary").textContent = t.diagnostics;
 $("clearLogBtn").textContent = t.clear_log;
+$("copyLogBtn").textContent = t.copy_log;
+$("safetyNote").textContent = t.observe_notice;
 document.documentElement.lang = lang;
 
 // -------------------------
@@ -296,136 +314,45 @@ function registerDpEl(dpId, update) {
 function rawToDisplay(v, scale) { return scale ? v / Math.pow(10, scale) : v; }
 function displayToRaw(v, scale) { return scale ? Math.round(v * Math.pow(10, scale)) : Math.round(v); }
 
-function makeControl(fn) {
-  const dpId = fn.dp_id;
-  const dt = specToDt(fn.type);
-  const name = fn.code || ("dp " + dpId);
-  const values = parseValues(fn);
-
-  let node;
-  const send = (type, value) => { if (tuya) tuya.sendDp(dpId, type, value); };
-
-  if (dt === DT.BOOL) {
-    node = document.createElement("div");
-    node.className = "switch";
-    node.setAttribute("role", "switch");
-    node.setAttribute("aria-checked", "false");
-    node.onclick = () => {
-      const next = node.getAttribute("aria-checked") !== "true";
-      node.setAttribute("aria-checked", String(next));
-      send(DT.BOOL, next);
-    };
-    registerDpEl(dpId, v => node.setAttribute("aria-checked", String(!!v)));
-
-  } else if (dt === DT.ENUM) {
+function formatDpValue(dpDef, v) {
+  const dt = specToDt(dpDef.type);
+  const values = parseValues(dpDef);
+  if (v instanceof Uint8Array) return hex(v);
+  if (dt === DT.BOOL) return v ? t.on : t.off;
+  if (dt === DT.ENUM) {
     const range = Array.isArray(values.range) ? values.range : [];
-    if (range.length && range.length <= 4) {
-      node = document.createElement("div");
-      node.className = "segment";
-      range.forEach((label, i) => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.textContent = label;
-        b.setAttribute("aria-pressed", "false");
-        b.onclick = () => {
-          [...node.children].forEach(x => x.setAttribute("aria-pressed", "false"));
-          b.setAttribute("aria-pressed", "true");
-          send(DT.ENUM, i);
-        };
-        node.appendChild(b);
-      });
-      registerDpEl(dpId, v => {
-        [...node.children].forEach((x, i) => x.setAttribute("aria-pressed", String(i === v)));
-      });
-    } else {
-      node = document.createElement("select");
-      range.forEach((label, i) => {
-        const o = document.createElement("option");
-        o.value = String(i);
-        o.textContent = label;
-        node.appendChild(o);
-      });
-      node.onchange = () => send(DT.ENUM, Number(node.value));
-      registerDpEl(dpId, v => { node.value = String(v); });
-    }
-
-  } else if (dt === DT.VALUE) {
-    const scale = Number(values.scale || 0);
-    const min = values.min !== undefined ? rawToDisplay(Number(values.min), scale) : undefined;
-    const max = values.max !== undefined ? rawToDisplay(Number(values.max), scale) : undefined;
-    const step = values.step ? rawToDisplay(Number(values.step), scale) : Math.pow(10, -scale);
-
-    node = document.createElement("div");
-    node.className = "value-ctrl";
-    let number, range = null;
-    if (min !== undefined && max !== undefined && max > min) {
-      range = document.createElement("input");
-      range.type = "range";
-      range.min = String(min); range.max = String(max); range.step = String(step || 1);
-      range.onchange = () => {
-        number.value = range.value;
-        send(DT.VALUE, displayToRaw(Number(range.value), scale));
-      };
-      node.appendChild(range);
-    }
-    number = document.createElement("input");
-    number.type = "number";
-    number.step = String(step || 1);
-    if (min !== undefined) number.min = String(min);
-    if (max !== undefined) number.max = String(max);
-    number.onchange = () => {
-      if (range) range.value = number.value;
-      send(DT.VALUE, displayToRaw(Number(number.value), scale));
-    };
-    node.appendChild(number);
-    if (values.unit) {
-      const u = document.createElement("span");
-      u.className = "unit";
-      u.textContent = values.unit;
-      node.appendChild(u);
-    }
-    registerDpEl(dpId, v => {
-      const d = String(rawToDisplay(v, scale));
-      number.value = d;
-      if (range) range.value = d;
-    });
-
-  } else if (dt === DT.STRING) {
-    node = document.createElement("div");
-    node.className = "inline";
-    const input = document.createElement("input");
-    input.type = "text";
-    const b = document.createElement("button");
-    b.className = "ghost";
-    b.textContent = t.send;
-    b.onclick = () => send(DT.STRING, input.value);
-    node.appendChild(input);
-    node.appendChild(b);
-    registerDpEl(dpId, v => { input.value = String(v); });
-
-  } else {
-    node = document.createElement("span");
-    registerDpEl(dpId, v => { node.textContent = v instanceof Uint8Array ? hex(v) : String(v); });
+    return (range[v] !== undefined ? range[v] : v) + (values.unit ? " " + values.unit : "");
   }
-
-  return { name, node };
+  if (dt === DT.VALUE) {
+    return rawToDisplay(v, Number(values.scale || 0)) + (values.unit ? " " + values.unit : "");
+  }
+  return String(v) + (values.unit ? " " + values.unit : "");
 }
 
-function addRow(card, labelText, control, readOnly) {
-  const row = document.createElement("div");
-  row.className = "row";
-  const label = document.createElement("div");
-  label.className = "row-label";
-  label.textContent = labelText;
-  if (readOnly) {
-    const tag = document.createElement("span");
-    tag.className = "ro";
-    tag.textContent = t.read_only;
-    label.appendChild(tag);
-  }
-  row.appendChild(label);
-  row.appendChild(control);
-  card.appendChild(row);
+// Read-only tile: shows a datapoint's identity and its live reported value.
+// Observe-only — there is deliberately no control element that can send.
+function makeTile(dpDef) {
+  const dpId = dpDef.dp_id;
+  const tile = document.createElement("div");
+  tile.className = "tile";
+
+  const lab = document.createElement("div");
+  lab.className = "tile-label";
+  lab.textContent = dpDef.code || ("dp " + dpId);
+
+  const meta = document.createElement("div");
+  meta.className = "tile-meta";
+  meta.textContent = "dp " + dpId + " · " + (dpDef.type || "?") + " · " + t.read_only;
+
+  const val = document.createElement("div");
+  val.className = "tile-value";
+  val.textContent = "–";
+
+  tile.appendChild(lab);
+  tile.appendChild(meta);
+  tile.appendChild(val);
+  registerDpEl(dpId, v => { val.textContent = formatDpValue(dpDef, v); });
+  return tile;
 }
 
 function sectionTitle(text) {
@@ -434,63 +361,31 @@ function sectionTitle(text) {
   return h;
 }
 
+// Observe-only: every datapoint (both the writable "functions" and the
+// read-only "status" list) is rendered as a read-only tile. There is no
+// element in the DOM that can send a command.
 function buildControls(spec) {
   controlsEl.textContent = "";
   dpUi.clear();
   if (!spec) return;
 
-  const functions = spec.functions || [];
-  const status = spec.status || [];
-
-  if (functions.length) {
-    const sec = document.createElement("section");
-    sec.className = "section";
-    sec.appendChild(sectionTitle(t.section_controls));
-    const card = document.createElement("div");
-    card.className = "card";
-    for (const fn of functions) {
-      const { name, node } = makeControl(fn);
-      addRow(card, name, node, false);
-    }
-    sec.appendChild(card);
-    controlsEl.appendChild(sec);
-  }
-
-  if (status.length) {
-    const sec = document.createElement("section");
-    sec.className = "section";
-    sec.appendChild(sectionTitle(t.section_status));
-    const tiles = document.createElement("div");
-    tiles.className = "tiles";
-    for (const st of status) {
-      const values = parseValues(st);
-      const scale = Number(values.scale || 0);
-      const tile = document.createElement("div");
-      tile.className = "tile";
-      const lab = document.createElement("div");
-      lab.className = "tile-label";
-      lab.textContent = st.code || ("dp " + st.dp_id);
-      const val = document.createElement("div");
-      val.className = "tile-value";
-      val.textContent = "–";
-      tile.appendChild(lab);
-      tile.appendChild(val);
-      tiles.appendChild(tile);
-      registerDpEl(st.dp_id, v => {
-        val.textContent = (typeof v === "number" ? rawToDisplay(v, scale) : v) +
-          (values.unit ? " " + values.unit : "");
-      });
-    }
-    sec.appendChild(tiles);
-    controlsEl.appendChild(sec);
-  }
-
-  if (!functions.length && !status.length) {
+  const all = [...(spec.functions || []), ...(spec.status || [])];
+  if (!all.length) {
     const empty = document.createElement("div");
     empty.className = "empty";
     empty.textContent = t.controls_empty;
     controlsEl.appendChild(empty);
+    return;
   }
+
+  const sec = document.createElement("section");
+  sec.className = "section";
+  sec.appendChild(sectionTitle(t.section_datapoints));
+  const tiles = document.createElement("div");
+  tiles.className = "tiles";
+  for (const dp of all) tiles.appendChild(makeTile(dp));
+  sec.appendChild(tiles);
+  controlsEl.appendChild(sec);
 }
 
 function onDp(dp) {
@@ -506,9 +401,21 @@ let tuya = null;
 
 const OPTIONAL_SERVICES = [
   ...TuyaBLE.SERVICE_UUIDS,
-  0x1800, 0x1801, 0x180a, 0x180f, 0x1910, 0xa201,
-  0xfd50, 0xfff0, 0xffe0,
+  // standard SIG services
+  0x1800, 0x1801, 0x1802, 0x1804, 0x1805, 0x1808, 0x1809,
+  0x180a, 0x180f, 0x1812, 0x1816, 0x181a, 0x181c, 0x1822,
   "battery_service", "device_information",
+  // Tuya BLE
+  0x1910, 0xa201, 0xfd50, 0xfd51,
+  // common vendor / serial / DFU services
+  0xfff0, 0xffe0, 0xffe5, 0xffe9, 0xffe1,
+  0xfe95, 0xfe59, 0xfee7, 0xfeed,
+  0x0001, 0xae00,
+  "6e400001-b5a3-f393-e0a9-e50e24dcca9e", // Nordic UART
+  "49535343-fe7d-4ae5-8fa9-9fafd205e455", // ISSC transparent serial
+  "0000f000-0000-1000-8000-00805f9b34fb",
+  "00010203-0405-0607-0809-0a0b0c0d1912", // Telink OTA
+  "00010203-0405-0607-0809-0a0b0c0d2b11",
 ];
 
 function setConnected(connected) {
@@ -535,11 +442,18 @@ connectBtn.onclick = async () => {
     setStatus(t.failed("crypto module not loaded"), "is-error");
     return;
   }
+  if (!("bluetooth" in navigator)) {
+    setStatus(t.bt_unsupported, "is-error");
+    log("navigator.bluetooth is undefined (insecure context or unsupported browser)");
+    return;
+  }
 
   try {
     setStatus(t.status_scanning, "is-busy");
     logEl.textContent = "";
 
+    // NOTE: requestDevice() must run inside the click's user gesture, so nothing
+    // may be awaited before it.
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: OPTIONAL_SERVICES,
@@ -564,14 +478,40 @@ connectBtn.onclick = async () => {
     setStatus(t.status_connGatt, "is-busy");
     await tuya.connect(device, creds);
   } catch (err) {
-    log("error: " + err.message);
-    setStatus(t.failed(err.message), "is-error");
+    log("error: " + err.name + ": " + err.message);
+    if (err.name === "NotFoundError" && /cancel/i.test(err.message)) {
+      // The chooser was dismissed (or showed no devices) — not a real failure.
+      setStatus(t.status_cancelled, "");
+    } else if (err.name === "NotFoundError") {
+      setStatus(t.bt_off, "is-error");
+    } else if (err.name === "SecurityError") {
+      setStatus(t.bt_gesture, "is-error");
+    } else {
+      setStatus(t.failed(err.message), "is-error");
+    }
     setConnected(false);
     tuya = null;
   }
 };
 
 $("clearLogBtn").onclick = () => { logEl.textContent = ""; };
+
+$("copyLogBtn").onclick = async () => {
+  const btn = $("copyLogBtn");
+  try {
+    await navigator.clipboard.writeText(logEl.textContent);
+    btn.textContent = t.copied;
+  } catch (_) {
+    // Clipboard API needs HTTPS/permission; fall back to selecting the text.
+    const r = document.createRange();
+    r.selectNodeContents(logEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    btn.textContent = t.copied;
+  }
+  setTimeout(() => { btn.textContent = t.copy_log; }, 1500);
+};
 
 // -------------------------
 // 10. Boot
@@ -597,4 +537,16 @@ $("clearLogBtn").onclick = () => { logEl.textContent = ""; };
     controlsEl.appendChild(empty);
   }
   if (!ok) log("(connect is disabled until the crypto module loads)");
+  log("secure context: " + window.isSecureContext);
+  if (!("bluetooth" in navigator)) {
+    log(t.bt_unsupported);
+  } else if (navigator.bluetooth.getAvailability) {
+    navigator.bluetooth.getAvailability().then(a => { if (!a) log(t.bt_off); });
+    if (navigator.bluetooth.addEventListener) {
+      navigator.bluetooth.addEventListener("availabilitychanged", e => {
+        log("bluetooth availability changed: " + e.value);
+        if (!e.value) log(t.bt_off);
+      });
+    }
+  }
 })();
