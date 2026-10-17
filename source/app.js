@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.4";
+const APP_VERSION = "0.7.5";
 
 // -------------------------
 // 1. Localization dictionary
@@ -469,11 +469,18 @@ function setDeviceName(name) {
 
 function collectDevices(data) {
   let arr = [];
-  if (data && data.devices && typeof data.devices === "object") arr = Object.values(data.devices);
-  else if (data && data.result && data.result.devices && typeof data.result.devices === "object") arr = Object.values(data.result.devices);
-  else if (data && data.result && typeof data.result === "object") arr = [data.result];
-  else if (data && typeof data === "object") arr = [data];
-  return arr.filter(d => d && typeof d === "object" &&
+  if (Array.isArray(data)) {
+    arr = data;
+  } else if (data && typeof data === "object") {
+    if (Array.isArray(data.result)) arr = data.result;
+    else if (Array.isArray(data.devices)) arr = data.devices;
+    else if (data.result && Array.isArray(data.result.devices)) arr = data.result.devices;
+    else if (data.devices && typeof data.devices === "object") arr = Object.values(data.devices);
+    else if (data.result && data.result.devices && typeof data.result.devices === "object") arr = Object.values(data.result.devices);
+    else if (data.result && typeof data.result === "object") arr = [data.result];
+    else arr = [data];
+  }
+  return arr.filter(d => d && typeof d === "object" && !Array.isArray(d) &&
     (d.local_key || d.localKey || d.device_id || d.deviceId || d.id || d.functions || d.status));
 }
 
@@ -525,6 +532,7 @@ function importConfig(data) {
   if (idx < 0) idx = 0;
   $("deviceSelect").value = String(idx);
   applyDevice(list[idx]);
+  if (!keyInput.value) log("note: this file has no local_key — enter it under Credential before connecting");
 
   importStatusEl.textContent = t.import_ok($("deviceName").textContent);
   importStatusEl.classList.remove("error");
