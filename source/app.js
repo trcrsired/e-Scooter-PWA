@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.4.0";
+const APP_VERSION = "0.4.1";
 
 // -------------------------
 // 1. Localization dictionary
@@ -325,6 +325,7 @@ $("saveKeysBtn").onclick = () => {
 // 8. Datapoint spec -> UI
 // -------------------------
 const DT = TuyaDT;
+const DT_NAMES = Object.fromEntries(Object.entries(DT).map(([k, v]) => [v, k]));
 const dpUi = new Map(); // dp_id -> [update fn]
 
 function specToDt(type) {
@@ -701,7 +702,8 @@ function buildControls(spec) {
 function onDp(dp) {
   lastDp.set(dp.id, dp.value);
   observed.add(dp.id);
-  log("← dp " + dp.id + " = " + (dp.value instanceof Uint8Array ? hex(dp.value) : dp.value));
+  log("← dp " + dp.id + " (" + (DT_NAMES[dp.type] || dp.type) + ") = " +
+    (dp.value instanceof Uint8Array ? hex(dp.value) : dp.value));
   const handlers = dpUi.get(dp.id);
   if (handlers) for (const fn of handlers) fn(dp.value);
   addObservedTile(dp.id);
