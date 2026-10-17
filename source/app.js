@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.31";
+const APP_VERSION = "0.7.32";
 
 // -------------------------
 // 1. Localization dictionary
@@ -1951,10 +1951,10 @@ const Geo = {
   },
   render() {
     const U = UNITS[unit];
-    $("rideSpeed").textContent = String(Math.round(this.speedKmh * U.speed));
+    $("rideSpeed").textContent = (this.speedKmh * U.speed).toFixed(1);
     $("rideTrip").textContent = (this.tripM * U.dist).toFixed(U.distDec);
-    $("rideMax").textContent = String(Math.round(this.maxKmh * U.speed));
-    $("rideAvg").textContent = this.samples ? String(Math.round((this.sumKmh / this.samples) * U.speed)) : "0";
+    $("rideMax").textContent = (this.maxKmh * U.speed).toFixed(1);
+    $("rideAvg").textContent = this.samples ? (this.sumKmh / this.samples * U.speed).toFixed(1) : "0.0";
     $("rideTime").textContent = fmtTime(this.running ? (Date.now() - this.startedAt) / 1000 : 0);
     checkSpeedWarn();
   },
@@ -2413,7 +2413,7 @@ const Announce = {
   speak() {
     this.count++;
     const U = UNITS[unit];
-    const v = Math.round(Geo.speedKmh * U.speed);
+    const v = (Geo.speedKmh * U.speed).toFixed(1);
     const spoken = (U.speak && (U.speak[lang] || U.speak.en)) || U.speedLabel;
     const text = v + " " + spoken;   // e.g. "22 kilometers per hour"
     log("tts " + this.count + ": " + text);
