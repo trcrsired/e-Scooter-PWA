@@ -9,6 +9,11 @@ a GPLv3 free software of PWA for e-scooter
   - `app.js` — UI, credential storage, CBC wrapper over the wasm crypto, and
     auto-generated controls from an imported datapoint spec.
   - `tuya_crypto.wasm` — MD5 + AES-128 (ECB primitive; CBC is built in JS).
+  - `sw.js` — service worker (offline cache). **Bump `SW_VERSION` at the top
+    every time this file changes**; a new version string invalidates the old
+    cache so the installed PWA updates.
+  - `sw-register.js` — registers the service worker and reloads once a new
+    version takes over.
 - `cpp/` — `tuya_crypto.cpp`, built to `source/tuya_crypto.wasm` with
   clang + fast_io (see comment in the file)
 - `tools/` — `fetch_keys.py` pulls device credentials from Tuya OpenAPI
