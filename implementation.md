@@ -65,7 +65,8 @@ The main area has two tabs:
 - **Debug** — the raw datapoint UI: the safety note, the auto-generated
   spec-driven controls, a manual datapoint sender, a **Query scooter state**
   button (re-asks the scooter to report every datapoint, so you can see whether
-  a write was accepted) and the diagnostics log.
+  a write was accepted) and the diagnostics log (every line is prefixed with an
+  ISO 8601 timestamp, e.g. `2026-10-17T20:31:05.123Z`).
 
 **Settings** (the ⚙ button) is a full-screen view with sections:
 - **Language** — interface language (English / 中文) and which speech voice the

@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.10";
+const APP_VERSION = "0.7.11";
 
 // -------------------------
 // 1. Localization dictionary
@@ -327,7 +327,8 @@ $("ttsState").textContent = t.tts_off;
 // 4. Helpers
 // -------------------------
 function log(msg) {
-  logEl.textContent += msg + "\n";
+  const ts = new Date().toISOString(); // ISO 8601, e.g. 2026-10-17T20:31:05.123Z
+  logEl.textContent += ts + "  " + msg + "\n";
   logEl.scrollTop = logEl.scrollHeight;
 }
 let _toastTimer = null;
