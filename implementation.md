@@ -56,7 +56,9 @@ The main area has two tabs:
   **Start tracking**. The scooter's own read-outs (battery, voltage, temp) are
   shown as cards. A **mode selector** (🚶 Walk / 🍃 Eco / 🛴 行驶 / ⚡ 运动) shows
   the current ride mode from the gear datapoint (dp 15) and lets you switch it
-  (through the usual confirmation gate). An optional **speed announcement**
+  (through the usual confirmation gate). A **lock toggle** (dp 1 — the scooter's
+  lock boolean, shown as 🔒 Locked / 🔓 Unlocked) sits right under the hero.
+  An optional **speed announcement**
   toggle speaks the current speed with the Web Speech API every *N* seconds
   (default 30) for at most *M* times (`0` = unlimited) — kept minimal and spoken
   in a natural form (e.g. “22 km per h”). A separate **speed warning**
@@ -70,9 +72,9 @@ The main area has two tabs:
   acknowledged by the scooter with a `0x27` echo, which the app logs as an
   `ack dp …` line. That echo only means the frame was received — it is *not*
   proof the scooter acted on it, so it is deliberately kept out of the live
-  datapoint state. After a gear write the app re-queries the scooter and
-  compares the real `dp 15` read-back against what it asked for, logging (and
-  toasting) whether the scooter actually switched.
+  datapoint state. After a gear **or lock** write the app re-queries the scooter
+  and compares the real read-back (`dp 15` / `dp 1`) against what it asked for,
+  logging (and toasting) whether the scooter actually obeyed.
 
 **Settings** (the ⚙ button) is a full-screen view with sections:
 - **Language** — interface language (English / 中文) and which speech voice the
@@ -80,8 +82,11 @@ The main area has two tabs:
   also switches the announcement language to match the voice.
 - **Scooter** — manage several scooters entirely in the UI: a picker to switch
   the active one, **Add** to create another, **Remove** to delete one, and the
-  scooter's name (shown in the app bar). Importing a JSON merges into this list,
-  and the credentials below always apply to the selected scooter.
+  scooter's name (shown in the app bar). Each scooter also has a **Bluetooth name
+  filter** (e.g. `demo`) which the connect flow uses as a `namePrefix` so the
+  chooser only lists that scooter when several are nearby. Importing a JSON
+  merges into this list, and the credentials below always apply to the selected
+  scooter.
 - **Credential** — importing your scooter's JSON from the Tuya IoT platform is
   the preferred way (there is a short step-by-step guide and a link to
   <https://iot.tuya.com/> right there). Manual `local_key` / `device_id` /

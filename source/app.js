@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.13";
+const APP_VERSION = "0.7.14";
 
 // -------------------------
 // 1. Localization dictionary
@@ -93,6 +93,13 @@ const i18n = {
     arm_needed: "Turn on \u201cEnable sending commands\u201d in Debug to change the mode.",
     gear_applied: v => `Scooter confirmed ${v}`,
     gear_rejected: v => `Scooter did not switch (still ${v})`,
+    lock_locked: "Locked",
+    lock_unlocked: "Unlocked",
+    lock_unknown: "Lock state unknown",
+    lock_applied: v => `Lock confirmed: ${v}`,
+    lock_rejected: v => `Lock not applied (still ${v})`,
+    bt_name_label: "Bluetooth name filter",
+    bt_name_note: "Only devices whose name starts with this appear in the chooser.",
     credential_title: "Credential",
     lang_title: "Language",
     lang_label: "Interface language",
@@ -208,6 +215,13 @@ const i18n = {
     arm_needed: "请先在调试页开启“启用发送命令”后再切换模式。",
     gear_applied: v => `滑板车已确认切换到 ${v}`,
     gear_rejected: v => `滑板车未切换（仍为 ${v}）`,
+    lock_locked: "已锁",
+    lock_unlocked: "已解锁",
+    lock_unknown: "锁状态未知",
+    lock_applied: v => `锁已确认：${v}`,
+    lock_rejected: v => `锁未生效（仍为 ${v}）`,
+    bt_name_label: "蓝牙名称过滤",
+    bt_name_note: "选择滑板车时，只显示名称以此开头的设备。",
     credential_title: "凭据",
     lang_title: "语言",
     lang_label: "界面语言",
@@ -282,6 +296,8 @@ function applyStatic() {
   $("devicePickLabel").textContent = t.device_pick_label;
   $("deviceAddBtn").textContent = t.device_add;
   $("deviceRemoveBtn").textContent = t.device_remove;
+  $("btNameLabel").textContent = t.bt_name_label;
+  $("btNameNote").textContent = t.bt_name_note;
   $("credTitle").textContent = t.credential_title;
   $("credHintText").textContent = t.cred_hint;
   $("credHelpSummary").textContent = t.cred_help;
@@ -567,6 +583,7 @@ function loadDeviceIntoForm(dev) {
   devIdInput.value = dev.device_id || "";
   uuidInput.value = dev.uuid || "";
   $("deviceNameInput").value = dev.device_name || "";
+  $("btNameInput").value = dev.bt_name || "";
   $("deviceName").textContent = dev.device_name || "";
 }
 
@@ -678,6 +695,7 @@ $("deviceRemoveBtn").addEventListener("click", () => {
 });
 
 $("deviceNameInput").addEventListener("change", () => updateActiveDevice({ device_name: $("deviceNameInput").value.trim() }));
+$("btNameInput").addEventListener("change", () => updateActiveDevice({ bt_name: $("btNameInput").value.trim() }));
 $("keyInput").addEventListener("change", () => updateActiveDevice({ local_key: keyInput.value.trim() }));
 $("devIdInput").addEventListener("change", () => updateActiveDevice({ device_id: devIdInput.value.trim() }));
 $("uuidInput").addEventListener("change", () => updateActiveDevice({ uuid: uuidInput.value.trim() }));
@@ -1142,6 +1160,7 @@ function onDp(dp) {
   addObservedTile(dp.id);
   updateRideCard(dp.id, dp.value);
   updateGear(dp.id, dp.value, dp.type);
+  updateLock(dp.id, dp.value, dp.type);
 }
 
 // -------------------------
@@ -1386,6 +1405,58 @@ function updateGear(id, v, type) {
   }
 }
 
+// ---- lock (dp 1) ----
+// On this family of Tuya scooters dp 1 is the lock boolean (true = locked).
+// It is the control the rider cares about most, so it gets a first-class
+// toggle in the Ride view; the real read-back after a write tells us whether
+// the scooter actually obeyed.
+const LOCK_DP = 1;
+let lockType = null;
+let currentLock = null;
+let lockExpect = null;
+
+function renderLock() {
+  const btn = $("lockBtn");
+  if (!btn) return;
+  const locked = currentLock === true;
+  btn.classList.toggle("is-locked", locked);
+  btn.classList.toggle("is-unlocked", currentLock !== null && !locked);
+  $("lockIcon").textContent = currentLock === null ? "🔒" : (locked ? "🔒" : "🔓");
+  $("lockText").textContent = currentLock === null
+    ? t.lock_unknown
+    : (locked ? t.lock_locked : t.lock_unlocked);
+}
+
+function onLockClick() {
+  if (!tuya) { toast(t.status_disconnected); return; }
+  if (!armed) { toast(t.arm_needed); return; }
+  const want = currentLock ? 0 : 1; // toggle
+  const label = want ? "🔒 " + t.lock_locked : "🔓 " + t.lock_unlocked;
+  requestSend(LOCK_DP, lockType || DT.BOOL, want, label, null,
+    () => { lockExpect = { value: want, at: Date.now() }; });
+}
+
+function updateLock(id, v, type) {
+  if (id !== LOCK_DP) return;
+  if (type != null) lockType = type;
+  if (v == null) return;
+  currentLock = (typeof v === "boolean") ? v : !!Number(v);
+  renderLock();
+  if (lockExpect && Date.now() - lockExpect.at < 8000) {
+    const want = lockExpect.value;
+    lockExpect = null;
+    const got = currentLock ? 1 : 0;
+    const ok = got === want;
+    log(ok
+      ? "lock read-back: dp 1 = " + got + " — scooter applied it"
+      : "lock read-back: dp 1 = " + got + " (asked for " + want + ") — scooter did NOT apply it");
+    toast(ok
+      ? t.lock_applied(got ? t.lock_locked : t.lock_unlocked)
+      : t.lock_rejected(got ? t.lock_locked : t.lock_unlocked));
+  }
+}
+$("lockBtn").addEventListener("click", onLockClick);
+
 // ---- voice speed announcements (Web Speech API) ----
 const LS_TTS = "escooter.tts";
 const ttsToggle = $("ttsToggle"), ttsEvery = $("ttsEvery"), ttsMax = $("ttsMax");
@@ -1533,6 +1604,7 @@ function setLang(l) {
   setConnected(!!tuya);
   populateVoices();
   updateWarnUi();
+  renderLock();
   log("language: " + l);
 }
 $("langSelect").addEventListener("change", () => setLang($("langSelect").value));
@@ -1571,16 +1643,31 @@ const LS_BTID = "escooter.btid"; // BluetoothDevice.id we were last allowed to u
 // Web Bluetooth normally forces the device chooser on every launch. If the
 // browser supports navigator.bluetooth.getDevices() (i.e. it remembers the
 // origin's permission), reuse the last device and skip the chooser entirely.
+//
+// Per-profile Bluetooth name filter (Settings → Scooter, e.g. "demo"): when
+// set, the chooser only lists devices whose advertised name starts with it,
+// and the remembered-device search prefers a matching name. Handy when more
+// than one scooter is nearby.
+function btNameFilter() {
+  const dev = (importedDevices && importedDevices[activeIndex]) || null;
+  return (dev && dev.bt_name ? String(dev.bt_name) : "").trim();
+}
+function nameMatchesFilter(d, want) {
+  return !want || String(d.name || "").toLowerCase().startsWith(want.toLowerCase());
+}
+
 async function acquireDevice() {
   const remembered = localStorage.getItem(LS_BTID) || "";
+  const want = btNameFilter();
   const canGet = typeof navigator.bluetooth.getDevices === "function";
   if (remembered && canGet) {
     try {
       const known = await navigator.bluetooth.getDevices();
-      const found = known.find(d => d.id === remembered) ||
-        (known.length === 1 ? known[0] : null);
+      let found = known.find(d => d.id === remembered) || null;
+      if (!found && want) found = known.find(d => nameMatchesFilter(d, want)) || null;
+      if (!found && !want && known.length === 1) found = known[0];
       if (found) {
-        log("reusing remembered Bluetooth device: " + (found.name || found.id) + " (no chooser)");
+        log("reusing Bluetooth device: " + (found.name || found.id) + " (no chooser)");
         return found;
       }
       log("remembered device not available; opening the chooser");
@@ -1592,10 +1679,14 @@ async function acquireDevice() {
   }
   // Fallback: this MUST run inside the click's user gesture, so nothing else
   // may be awaited before it.
-  return navigator.bluetooth.requestDevice({
-    acceptAllDevices: true,
-    optionalServices: OPTIONAL_SERVICES,
-  });
+  const opts = { optionalServices: OPTIONAL_SERVICES };
+  if (want) {
+    opts.filters = [{ namePrefix: want }];
+    log("Bluetooth chooser filtered by name prefix: \u201c" + want + "\u201d");
+  } else {
+    opts.acceptAllDevices = true;
+  }
+  return navigator.bluetooth.requestDevice(opts);
 }
 
 connectBtn.onclick = async () => {
@@ -1700,6 +1791,7 @@ $("copyLogBtn").onclick = async () => {
   buildModeButtons();
   setUnit(unit);
   populateVoices();
+  renderLock();
   if (!ok) log("(connect is disabled until the crypto module loads)");
   log("secure context: " + window.isSecureContext);
   if (!("bluetooth" in navigator)) {

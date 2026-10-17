@@ -19,10 +19,11 @@ scooter's datapoints.
 - **Speed warning** — flash/vibrate/toast when you go faster than a limit you
   set.
 - **Ride-mode switch** — 🚶 Walk / 🍃 Eco / 🛴 D / ⚡ S, straight from the main UI.
+- **Lock toggle** — 🔒 Locked / 🔓 Unlocked (dp 1) right on the Ride dashboard.
 - **Debug view** — the raw datapoint controls, a manual datapoint sender and a
   diagnostics log.
 - **Multiple scooters** — keep a list of profiles and switch between them in the
-  UI.
+  UI; each profile can filter the Bluetooth chooser by device-name prefix.
 
 ## Why
 
