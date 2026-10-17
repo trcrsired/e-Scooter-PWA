@@ -112,12 +112,36 @@ that uses the "secure V2" scheme (security modes 11–16, as in
 `../TuyaOpen/src/tuya_cloud_service/ble/`) is not implemented; this scooter does
 not need it.
 
+### v4 datapoint writes — the header that makes the scooter act
+
+A v4 DP write (`0x0027`) is **not** the bare KLV list. The firmware
+(`tuya_ble_handle_dp_data_write_req`) requires a **5-byte header** first:
+
+```
+[0]     version   must be 0x00   (else "cmd dp write version not support")
+[1..4]  sn        uint32 BE      (echoed back in the ack)
+[5..]   KLV list  dp_id, dtype, len(2 BE), value
+```
+
+The device then answers `0x0027` with `header(5) | status(1)`, where status
+`0x00` = accepted and non-zero = rejected. Sending the bare KLV (no header) is
+accepted at the BLE/session layer but never actuates the datapoint — the first
+KLV byte is read as `version` and the write is refused with status `0x01`. This
+is exactly why the lock (dp 1) and gear (dp 15) were acknowledged yet did
+nothing. Framing source: `tuya-ble-v4/docs/protocol-v4.md` and
+`ShonP40/Tuya-BLE` (`_build_ikphogdj_v4_scalar_data`), both verified against the
+firmware SDK.
+
 ## Capturing the official app (HCI snoop)
 
-On this scooter a v4 DP write is **acknowledged but not applied** (the device
-echoes the datapoint back with code `0x0027` while the periodic report keeps the
-old value). To learn what the official Tuya app does differently, record its
-Bluetooth traffic and compare bytes:
+> Superseded: the v4 write framing above was found from the Tuya firmware SDK /
+> reference projects, so this capture is no longer required. It is kept as a
+> fallback for future unknowns.
+
+A v4 DP write is **acknowledged but not applied** (the device echoes a header +
+status with code `0x0027` while the periodic report keeps the old value). To
+learn what the official Tuya app does differently, record its Bluetooth traffic
+and compare bytes:
 
 1. Phone → Developer options → enable **Bluetooth HCI snoop log**; toggle
    Bluetooth off/on.

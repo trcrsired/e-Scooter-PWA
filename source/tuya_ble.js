@@ -218,6 +218,7 @@
     this.onLog = (handlers && handlers.onLog) || function () {};
     this.onDp = (handlers && handlers.onDp) || function () {};
     this.onAck = (handlers && handlers.onAck) || function () {};
+    this.onWriteAck = (handlers && handlers.onWriteAck) || function () {};
     this.onReady = (handlers && handlers.onReady) || function () {};
 
     this.device = null;
@@ -227,6 +228,7 @@
     this.creds = null;
 
     this.seq = 1;
+    this.dpSn = 0;           // v4 DP-write sequence (goes in the 4-byte header field)
     this.protocolVersion = 2;
     this.generation = 3;     // 3 = classic (2b10/2b11), 4 = newer (fd50/…07d0)
     this.keyLogin = null;    // md5(login_key)          -> security flag 4
@@ -579,21 +581,21 @@
       case CODE.PAIR:
         break;
 
-      case CODE.DPS_V4:
-        // v4 write acknowledgement: the scooter echoes the datapoint(s) back
-        // (e.g. "0f 04 00 01 02 01" = dp 15, ENUM, value 2). This only proves
-        // the frame was received — it is NOT proof the scooter acted on it.
-        // Feeding it into onDp made the gear selector show the requested mode
-        // even when the scooter ignored the write, so it is reported to onAck
-        // (logging only) instead of updating the live datapoint state.
-        this.log("ack raw: " + hex(data));
-        for (const dp of parseKlv(data, 2, 0)) {
-          const tn = Object.keys(DT).find(k => DT[k] === dp.type) || dp.type;
-          this.log("ack dp " + dp.id + " (" + tn + ") = " + dp.value +
-            " (echo — not a confirmed state change)");
-          this.onAck(dp);
-        }
+      case CODE.DPS_V4: {
+        // v4 write acknowledgement (FRM_DP_DATA_WRITE_RESP). The firmware
+        // echoes the request's 5-byte header (version + sn) and appends a
+        // status byte: 0x00 = accepted, non-zero = rejected (the firmware
+        // returns 0x01 for "version not supported" / KLV parse failure).
+        // This is NOT a datapoint echo — it says nothing about the new value.
+        const echoed = hex(data.subarray(0, Math.min(5, data.length)));
+        const status = data.length >= 6 ? data[5] : -1;
+        const ok = status === 0;
+        this.log("write ack: header=" + echoed + " status=" + status +
+          " (" + (ok ? "accepted" : "REJECTED") + ")");
+        this.onAck({ status: status, ok: ok, header: data.slice(0, 5) });
+        this.onWriteAck(ok, status);
         break;
+      }
 
       case CODE.RECV_DP:
         // v3 report: [id,type,len(1),value]...
@@ -685,7 +687,30 @@
         dps.map(function (d) { return "dp " + d.id + " = " + d.value; }).join(", "));
       return Promise.resolve();
     }
-    const raw = encodeKlv(dps, this.generation === 4 ? 2 : 1);
+    let raw;
+    if (this.generation === 4) {
+      // TuyaOS "new" protocol (v4) DP write. The firmware
+      // (tuya_ble_handle_dp_data_write_req) requires a 5-byte header before the
+      // KLV list:
+      //   [0]     version  (MUST be 0x00, else "cmd dp write version not support")
+      //   [1..4]  sn       (uint32 BE; echoed back in the response)
+      //   [5..]   KLV list (dp_id, dtype, len:2 BE, value)
+      // Sending the bare KLV under 0x0027 is accepted at the session layer but
+      // the datapoint is never applied (the header byte parses as version=dp_id
+      // -> immediate reject). This header is what makes the scooter act.
+      this.dpSn = (this.dpSn + 1) >>> 0;
+      const sn = this.dpSn;
+      const hdr = new Uint8Array(5);
+      hdr[0] = 0x00;
+      hdr[1] = (sn >>> 24) & 0xff;
+      hdr[2] = (sn >>> 16) & 0xff;
+      hdr[3] = (sn >>> 8) & 0xff;
+      hdr[4] = sn & 0xff;
+      raw = concat([hdr, encodeKlv(dps, 2)]);
+      this.log("→ DP write (v4, version+sn header): " + hex(raw));
+    } else {
+      raw = encodeKlv(dps, 1);
+    }
     const code = this.generation === 4 ? CODE.DPS_V4 : CODE.DPS;
     return this.send(code, raw, { wait: false }).catch(() => {});
   };
