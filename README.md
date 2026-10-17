@@ -56,9 +56,10 @@ The main area has two tabs:
 **Settings** (the ⚙ button) is a full-screen view with sections:
 - **Language** — interface language (English / 中文) and which speech voice the
   announcements use.
-- **Scooter** — the scooter's name (shown in the app bar) and, when the imported
-  file contains several, a picker to choose between them — handy when you own
-  more than one scooter.
+- **Scooter** — manage several scooters entirely in the UI: a picker to switch
+  the active one, **Add** to create another, **Remove** to delete one, and the
+  scooter's name (shown in the app bar). Importing a JSON merges into this list,
+  and the credentials below always apply to the selected scooter.
 - **Credential** — importing your scooter's JSON from the Tuya IoT platform is
   the preferred way (there is a short step-by-step guide and a link to
   <https://iot.tuya.com/> right there). Manual `local_key` / `device_id` /

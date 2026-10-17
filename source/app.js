@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.5";
+const APP_VERSION = "0.7.6";
 
 // -------------------------
 // 1. Localization dictionary
@@ -31,6 +31,7 @@ const i18n = {
     uuid_label: "Device UUID",
     save: "Save",
     saved: "Saved",
+    sent: "Sent to scooter",
     missing: "Fill in local key, device ID and UUID",
     wasm_ok: "crypto module loaded",
     wasm_missing: "tuya_crypto.wasm not found — run the build in cpp/",
@@ -135,6 +136,7 @@ const i18n = {
     uuid_label: "设备 UUID",
     save: "保存",
     saved: "已保存",
+    sent: "已发送到滑板车",
     missing: "请填写本地密钥、设备 ID 与 UUID",
     wasm_ok: "加密模块已加载",
     wasm_missing: "未找到 tuya_crypto.wasm —— 请在 cpp/ 中构建",
@@ -308,6 +310,19 @@ function log(msg) {
   logEl.textContent += msg + "\n";
   logEl.scrollTop = logEl.scrollHeight;
 }
+let _toastTimer = null;
+function toast(msg) {
+  const el = $("toast");
+  if (!el) { log(msg); return; }
+  el.textContent = msg;
+  el.hidden = false;
+  requestAnimationFrame(() => el.classList.add("open"));
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => {
+    el.classList.remove("open");
+    setTimeout(() => { el.hidden = true; }, 220);
+  }, 2800);
+}
 function hex(view) {
   const b = new Uint8Array(view.buffer || view, view.byteOffset || 0, view.byteLength || view.length);
   return [...b].map(x => x.toString(16).padStart(2, "0")).join(" ");
@@ -440,31 +455,27 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeSetting
 
 $("saveKeysBtn").onclick = () => {
   const c = loadCreds();
-  localStorage.setItem(LS_KEY, c.localKey);
-  localStorage.setItem(LS_DEVID, c.deviceId);
-  localStorage.setItem(LS_UUID, c.uuid);
+  updateActiveDevice({ local_key: c.localKey, device_id: c.deviceId, uuid: c.uuid });
   keysStatus.textContent = t.saved;
   keysStatus.classList.remove("error");
   setTimeout(() => { keysStatus.textContent = ""; }, 2000);
 };
 
 // -------------------------
-// 7b. Devices + importing a Tuya / keys.json config from the UI
+// 7b. Scooter list + importing a Tuya / keys.json config from the UI
 // -------------------------
 const LS_NAME = "escooter.device_name";
 const LS_DEVICES = "escooter.devices";
+const LS_ACTIVE = "escooter.active";
 const importStatusEl = $("importStatus");
 let importedDevices = [];
+let activeIndex = 0;
 
 function deviceLabel(d, i) {
-  return d.device_name || d.name || d.model || d.device_id || d.deviceId || d.id || ("device " + (i + 1));
+  return (d && (d.device_name || d.name || d.model)) || ("Scooter " + (i + 1));
 }
-
-function setDeviceName(name) {
-  name = (name || "").trim();
-  localStorage.setItem(LS_NAME, name);
-  $("deviceName").textContent = name;
-  $("deviceNameInput").value = name;
+function deviceIdOf(d) {
+  return (d && (d.device_id || d.deviceId || d.id || d.uuid)) || "";
 }
 
 function collectDevices(data) {
@@ -484,60 +495,109 @@ function collectDevices(data) {
     (d.local_key || d.localKey || d.device_id || d.deviceId || d.id || d.functions || d.status));
 }
 
+function persistDevices() {
+  localStorage.setItem(LS_DEVICES, JSON.stringify(importedDevices));
+  if (importedDevices[activeIndex]) localStorage.setItem(LS_ACTIVE, String(activeIndex));
+}
+function ensureDevices() {
+  if (!importedDevices.length) {
+    importedDevices = [{ device_name: "Scooter 1", local_key: "", device_id: "", uuid: "" }];
+    activeIndex = 0;
+    persistDevices();
+  }
+}
 function populateDeviceSelect() {
   const sel = $("deviceSelect");
-  const field = $("devicePickField");
   sel.textContent = "";
-  if (importedDevices.length <= 1) { field.hidden = true; return; }
-  field.hidden = false;
   importedDevices.forEach((d, i) => {
     const o = document.createElement("option");
     o.value = String(i);
     o.textContent = deviceLabel(d, i);
     sel.appendChild(o);
   });
+  sel.value = String(activeIndex);
+}
+function loadDeviceIntoForm(dev) {
+  keyInput.value = dev.local_key || "";
+  devIdInput.value = dev.device_id || "";
+  uuidInput.value = dev.uuid || "";
+  $("deviceNameInput").value = dev.device_name || "";
+  $("deviceName").textContent = dev.device_name || "";
 }
 
-// Apply one device: credentials, datapoint spec and display name.
-function applyDevice(dev) {
-  const localKey = dev.local_key || dev.localKey || "";
-  const deviceId = dev.device_id || dev.deviceId || dev.id || "";
-  const uuid = dev.uuid || "";
-  if (localKey || deviceId || uuid) {
-    keyInput.value = localKey || keyInput.value;
-    devIdInput.value = deviceId || devIdInput.value;
-    uuidInput.value = uuid || uuidInput.value;
-    localStorage.setItem(LS_KEY, keyInput.value);
-    localStorage.setItem(LS_DEVID, devIdInput.value);
-    localStorage.setItem(LS_UUID, uuidInput.value);
+// Pick the scooter at index i as the active one and load it everywhere.
+function selectDevice(i) {
+  ensureDevices();
+  if (!(i >= 0 && i < importedDevices.length)) i = 0;
+  activeIndex = i;
+  const dev = importedDevices[i];
+  persistDevices();
+  populateDeviceSelect();
+  loadDeviceIntoForm(dev);
+  localStorage.setItem(LS_KEY, keyInput.value);
+  localStorage.setItem(LS_DEVID, devIdInput.value);
+  localStorage.setItem(LS_UUID, uuidInput.value);
+  if (dev.functions || dev.status) {
+    deviceSpec = { functions: dev.functions || [], status: dev.status || [], name: deviceLabel(dev, i) };
   }
-  const functions = dev.functions || null;
-  const status = dev.status || null;
-  if (functions || status) {
-    deviceSpec = { functions: functions || [], status: status || [], name: deviceLabel(dev, 0) };
-    buildControls(deviceSpec);
+  buildControls(deviceSpec);
+}
+
+// Edit the active scooter's fields and persist.
+function updateActiveDevice(patch) {
+  const dev = importedDevices[activeIndex];
+  if (!dev) return;
+  Object.assign(dev, patch);
+  persistDevices();
+  if (patch.device_name !== undefined) {
+    $("deviceName").textContent = patch.device_name;
+    populateDeviceSelect();
   }
-  setDeviceName(deviceLabel(dev, 0));
+  localStorage.setItem(LS_KEY, dev.local_key || "");
+  localStorage.setItem(LS_DEVID, dev.device_id || "");
+  localStorage.setItem(LS_UUID, dev.uuid || "");
+}
+
+function mergeImported(dev, i) {
+  const out = {
+    device_name: deviceLabel(dev, i),
+    local_key: dev.local_key || dev.localKey || "",
+    device_id: dev.device_id || dev.deviceId || dev.id || "",
+    uuid: dev.uuid || "",
+  };
+  if (dev.functions) out.functions = dev.functions;
+  if (dev.status) out.status = dev.status;
+  return out;
 }
 
 function importConfig(data) {
   const list = collectDevices(data);
   if (!list.length) throw new Error("unrecognised file");
-  importedDevices = list;
-  localStorage.setItem(LS_DEVICES, JSON.stringify(list));
+
+  ensureDevices();
+  let focus = activeIndex;
+  for (let i = 0; i < list.length; i++) {
+    const dev = mergeImported(list[i], i);
+    const key = deviceIdOf(dev);
+    const at = key ? importedDevices.findIndex(d => deviceIdOf(d) === key) : -1;
+    if (at >= 0) {
+      importedDevices[at] = Object.assign({}, importedDevices[at], dev);
+      focus = at;
+    } else {
+      importedDevices.push(dev);
+      focus = importedDevices.length - 1;
+    }
+  }
+  activeIndex = focus;
+  persistDevices();
   populateDeviceSelect();
+  selectDevice(activeIndex);
 
-  const savedId = localStorage.getItem(LS_DEVID) || "";
-  let idx = list.findIndex(d => (d.device_id || d.deviceId || d.id) === savedId);
-  if (idx < 0) idx = 0;
-  $("deviceSelect").value = String(idx);
-  applyDevice(list[idx]);
-  if (!keyInput.value) log("note: this file has no local_key — enter it under Credential before connecting");
-
-  importStatusEl.textContent = t.import_ok($("deviceName").textContent);
+  importStatusEl.textContent = t.import_ok(importedDevices[activeIndex].device_name);
   importStatusEl.classList.remove("error");
   setTimeout(() => { importStatusEl.textContent = ""; }, 3000);
-  log("imported " + list.length + " scooter(s); using " + $("deviceName").textContent);
+  log("imported " + list.length + " scooter(s); list now has " + importedDevices.length);
+  if (!keyInput.value) log("note: no local_key for this scooter — enter it under Credential before connecting");
 }
 
 $("importInput").addEventListener("change", async (e) => {
@@ -552,41 +612,47 @@ $("importInput").addEventListener("change", async (e) => {
   e.target.value = "";
 });
 
-$("deviceSelect").addEventListener("change", () => {
-  const dev = importedDevices[Number($("deviceSelect").value)];
-  if (dev) applyDevice(dev);
+$("deviceSelect").addEventListener("change", () => selectDevice(Number($("deviceSelect").value)));
+
+$("deviceAddBtn").addEventListener("click", () => {
+  ensureDevices();
+  importedDevices.push({ device_name: "Scooter " + (importedDevices.length + 1), local_key: "", device_id: "", uuid: "" });
+  activeIndex = importedDevices.length - 1;
+  selectDevice(activeIndex);
+  $("deviceNameInput").focus();
 });
 
-$("deviceNameInput").addEventListener("change", () => {
-  setDeviceName($("deviceNameInput").value);
-  const idx = Number($("deviceSelect").value);
-  const dev = importedDevices[idx];
-  if (dev) {
-    dev.device_name = $("deviceNameInput").value.trim();
-    localStorage.setItem(LS_DEVICES, JSON.stringify(importedDevices));
-    if (importedDevices.length > 1) populateDeviceSelect();
+$("deviceRemoveBtn").addEventListener("click", () => {
+  if (importedDevices.length <= 1) {
+    importedDevices = [];
+    ensureDevices();
+  } else {
+    importedDevices.splice(activeIndex, 1);
+    if (activeIndex >= importedDevices.length) activeIndex = importedDevices.length - 1;
   }
+  selectDevice(activeIndex);
 });
 
-// Restore the last used scooter (name, credentials, spec) from this browser.
+$("deviceNameInput").addEventListener("change", () => updateActiveDevice({ device_name: $("deviceNameInput").value.trim() }));
+$("keyInput").addEventListener("change", () => updateActiveDevice({ local_key: keyInput.value.trim() }));
+$("devIdInput").addEventListener("change", () => updateActiveDevice({ device_id: devIdInput.value.trim() }));
+$("uuidInput").addEventListener("change", () => updateActiveDevice({ uuid: uuidInput.value.trim() }));
+
+// Restore the saved scooter list from this browser.
 function restoreDevices() {
-  const name = localStorage.getItem(LS_NAME) || "";
-  $("deviceName").textContent = name;
-  $("deviceNameInput").value = name;
   try {
     const saved = JSON.parse(localStorage.getItem(LS_DEVICES) || "[]");
-    if (!Array.isArray(saved) || !saved.length) return;
-    importedDevices = saved;
-    populateDeviceSelect();
-    const savedId = localStorage.getItem(LS_DEVID) || "";
-    let idx = saved.findIndex(d => (d.device_id || d.deviceId || d.id) === savedId);
-    if (idx < 0) idx = 0;
-    if (importedDevices.length > 1) $("deviceSelect").value = String(idx);
-    const dev = importedDevices[idx];
-    if (dev && (dev.functions || dev.status)) {
-      deviceSpec = { functions: dev.functions || [], status: dev.status || [], name: deviceLabel(dev, idx) };
-    }
+    if (Array.isArray(saved) && saved.length) importedDevices = saved;
   } catch (_) {}
+  ensureDevices();
+  const savedId = localStorage.getItem(LS_DEVID) || "";
+  let idx = importedDevices.findIndex(d => deviceIdOf(d) === savedId);
+  if (idx < 0) idx = Number(localStorage.getItem(LS_ACTIVE) || 0);
+  selectDevice(idx);
+  const dev = importedDevices[activeIndex];
+  if (dev && (dev.functions || dev.status)) {
+    deviceSpec = { functions: dev.functions || [], status: dev.status || [], name: deviceLabel(dev, activeIndex) };
+  }
 }
 
 // -------------------------
@@ -693,11 +759,18 @@ confirmOverlay.addEventListener("click", e => { if (e.target === confirmOverlay)
 // be on (tuya.allowWrites), shows a confirmation, and reverts the control if
 // the user declines.
 function requestSend(dpId, dt, rawValue, displayText, revert) {
-  if (!armed || !tuya) return;
+  if (!tuya) { toast(t.status_disconnected); return; }
+  if (!armed) { toast(t.arm_needed); return; }
   askConfirm("dp " + dpId, displayText).then(ok => {
     if (!ok) { if (revert) revert(); return; }
     log("→ dp " + dpId + " = " + (rawValue instanceof Uint8Array ? hex(rawValue) : rawValue));
-    tuya.sendDp(dpId, dt, rawValue);
+    try {
+      tuya.sendDp(dpId, dt, rawValue);
+      toast(t.sent);
+    } catch (e) {
+      log("send failed: " + (e && e.message ? e.message : e));
+      toast("send failed: " + (e && e.message ? e.message : e));
+    }
   });
 }
 
@@ -979,7 +1052,7 @@ function onDp(dp) {
   if (handlers) for (const fn of handlers) fn(dp.value);
   addObservedTile(dp.id);
   updateRideCard(dp.id, dp.value);
-  updateGear(dp.id, dp.value);
+  updateGear(dp.id, dp.value, dp.type);
 }
 
 // -------------------------
@@ -1114,6 +1187,7 @@ function updateRideCard(id, v) {
 // value may be a number or a Tuya ENUM string. The selector writes dp 15
 // (through the usual arm + confirmation gate).
 const GEAR_DP = 15;
+let gearType = null; // the DP type the scooter actually reports for dp 15
 const MODE_BTNS = [
   { key: "walk", id: "modeWalk", value: 0 },
   { key: "eco", id: "modeEco", value: 1 },
@@ -1146,12 +1220,14 @@ function buildModeButtons() {
   }
 }
 function onModeClick(b) {
-  if (!tuya) { log(t.status_disconnected); return; }
-  if (!armed) { log(t.arm_needed); return; }
-  requestSend(GEAR_DP, DT.ENUM, b.value, MODE_ICONS[b.key] + " " + MODE_LABELS[b.key](), null);
+  if (!tuya) { toast(t.status_disconnected); return; }
+  if (!armed) { toast(t.arm_needed); return; }
+  requestSend(GEAR_DP, gearType || DT.ENUM, b.value, MODE_ICONS[b.key] + " " + MODE_LABELS[b.key](), null);
 }
-function updateGear(id, v) {
-  if (id !== GEAR_DP || v == null) return;
+function updateGear(id, v, type) {
+  if (id !== GEAR_DP) return;
+  if (type != null) gearType = type;
+  if (v == null) return;
   const vk = String(v).toLowerCase();
   currentGear = GEAR_ALIASES[vk] || GEAR_ALIASES[String(Number(v))] || null;
   for (const b of MODE_BTNS) $(b.id).classList.toggle("is-active", b.key === currentGear);

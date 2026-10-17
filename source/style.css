@@ -535,6 +535,27 @@ select { cursor: pointer; }
 }
 .tab.is-active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(12px);
+  z-index: 30;
+  max-width: 90vw;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--card-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.toast.open { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast[hidden] { display: none; }
+
 main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 .view[hidden] { display: none; }
 
