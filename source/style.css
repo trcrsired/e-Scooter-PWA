@@ -650,6 +650,11 @@ main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 .lock-btn.is-locked { background: var(--danger); border-color: var(--danger); color: #fff; }
 .lock-btn.is-unlocked { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
 .lock-btn.is-on { background: var(--warn, #e8a13a); border-color: var(--warn, #e8a13a); color: #1a1a1a; }
+@keyframes nightglow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(242, 193, 78, 0.75); }
+  50% { box-shadow: 0 0 0 7px rgba(242, 193, 78, 0); }
+}
+.lock-btn.night-hint { animation: nightglow 1.6s ease-in-out 4; }
 .lock-btn:disabled { opacity: 0.5; }
 
 .ride-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }

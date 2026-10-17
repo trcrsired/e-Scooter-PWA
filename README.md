@@ -20,7 +20,8 @@ scooter's datapoints.
   set.
 - **Ride-mode switch** — 🚶 Walk / 🍃 Eco / 🛴 D / ⚡ S, straight from the main UI.
 - **Lock & headlight** — 🔒 Locked / 🔓 Unlocked (dp 1) and 💡 On / 🔌 Off
-  (dp 8) right on the Ride dashboard.
+  (dp 8) right on the Ride dashboard; it nags you to switch the headlight on
+  when you connect after dark (18:00–06:00).
 - **Speed limits** — set the Eco / D / S maximum speed (km/h) in Settings
   (datapoints 101 / 102 / 103), each with an editable allowed range.
 - **Debug view** — the raw datapoint controls, a manual datapoint sender, a

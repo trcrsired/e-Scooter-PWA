@@ -58,7 +58,10 @@ The main area has two tabs:
   the current ride mode from the gear datapoint (dp 15) and lets you switch it
   (through the usual confirmation gate). A **lock toggle** (dp 1 — the scooter's
   lock boolean, shown as 🔒 Locked / 🔓 Unlocked) and a **headlight toggle**
-  (dp 8, 💡 On / 🔌 Off) sit side by side right under the hero.
+  (dp 8, 💡 On / 🔌 Off) sit side by side right under the hero. When the app
+  first receives the headlight state and it is **night (18:00–06:00 local
+  time)** with the light off, it suggests turning it on (a toast plus a pulsing
+  glow on the button, once per session).
   An optional **speed announcement**
   toggle speaks the current speed with the Web Speech API every *N* seconds
   (default 30) for at most *M* times (`0` = unlimited) — kept minimal and spoken

@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.19";
+const APP_VERSION = "0.7.20";
 
 // -------------------------
 // 1. Localization dictionary
@@ -107,6 +107,7 @@ const i18n = {
     light_off_label: () => `\ud83d\udd0c ${t.light_off}`,
     light_applied: v => `Headlight confirmed: ${v}`,
     light_rejected: v => `Headlight not applied (still ${v})`,
+    light_night_hint: "It's dark outside \u2014 turn on the headlight?",
     bt_name_label: "Bluetooth name filter",
     bt_name_note: "Only devices whose name starts with this appear in the chooser.",
     bt_name_prompt_title: "Remember this scooter?",
@@ -263,6 +264,7 @@ const i18n = {
     light_off_label: () => `\ud83d\udd0c ${t.light_off}`,
     light_applied: v => `大灯已确认：${v}`,
     light_rejected: v => `大灯未生效（仍为 ${v}）`,
+    light_night_hint: "天黑了 \u2014 要打开大灯吗？",
     bt_name_label: "蓝牙名称过滤",
     bt_name_note: "选择滑板车时，只显示名称以此开头的设备。",
     bt_name_prompt_title: "记住这台滑板车？",
@@ -1805,6 +1807,8 @@ const HEADLIGHT_DP = 8;
 let headlightType = null;
 let currentLight = null;
 let lightExpect = null;
+let headlightSeen = false;  // have we received dp 8 at least once this session?
+let nightSuggested = false; // avoid nagging more than once per session
 
 function renderLight() {
   const btn = $("lightBtn");
@@ -1815,6 +1819,26 @@ function renderLight() {
   $("lightText").textContent = currentLight === null
     ? t.light_unknown
     : (on ? t.light_on : t.light_off);
+}
+
+// 18:00–06:00 local time.
+function isNight() {
+  const h = new Date().getHours();
+  return h >= 18 || h < 6;
+}
+
+// When we first learn the headlight state and it is night with the light off,
+// gently suggest turning it on (once per session). Called on the first dp-8 report.
+function maybeSuggestHeadlight() {
+  if (nightSuggested || !isNight() || currentLight !== false) return;
+  nightSuggested = true;
+  log("night reminder: it is dark and the headlight is off — suggesting turning it on");
+  toast("🌙 " + t.light_night_hint);
+  const btn = $("lightBtn");
+  if (btn) {
+    btn.classList.add("night-hint");
+    setTimeout(() => btn.classList.remove("night-hint"), 12000);
+  }
 }
 
 function onLightClick() {
@@ -1832,6 +1856,7 @@ function updateHeadlight(id, v, type) {
   if (v == null) return;
   currentLight = (typeof v === "boolean") ? v : !!Number(v);
   renderLight();
+  if (!headlightSeen) { headlightSeen = true; maybeSuggestHeadlight(); }
   if (lightExpect && Date.now() - lightExpect.at < 8000) {
     const want = lightExpect.value;
     lightExpect = null;
@@ -2143,6 +2168,8 @@ connectBtn.onclick = async () => {
         setStatus(t.status_connected(device.name || device.id), "is-connected");
         setConnected(true);
         buildControls(deviceSpec); // enable the arm-switch / manual sender now we're connected
+        headlightSeen = false;     // re-check the headlight on the first dp-8 report of this session
+        nightSuggested = false;
         maybeOfferNameFilter(device.name).catch(() => {});
       },
     });
