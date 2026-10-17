@@ -270,31 +270,79 @@ select { cursor: pointer; }
 .inline input { flex: 1 1 auto; }
 .inline .ghost { flex: 0 0 auto; }
 
-/* toggle switch */
+/* toggle switch (checkbox + .slider) */
 .switch {
   position: relative;
+  display: inline-block;
   flex: 0 0 auto;
-  width: 56px;
-  height: 32px;
+  width: 52px;
+  height: 30px;
+}
+.switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.switch .slider {
+  position: absolute;
+  inset: 0;
   border-radius: 999px;
   background: var(--card-2);
   border: 1px solid var(--border);
-  cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-.switch::after {
+.switch .slider::before {
   content: "";
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 24px;
-  height: 24px;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--muted);
   transition: transform 0.15s, background 0.15s;
 }
-.switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
-.switch[aria-checked="true"]::after { transform: translateX(24px); background: var(--switch-knob); }
+.switch input:checked + .slider { background: var(--accent); border-color: var(--accent); }
+.switch input:checked + .slider::before { transform: translateX(26px); background: var(--switch-knob); }
+.switch input:disabled + .slider { opacity: 0.45; }
+.switch input:disabled { cursor: not-allowed; }
+
+/* interactive control tiles */
+.tile-control { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.tile-control .tile-value { align-self: stretch; }
+.control-select,
+.control-num { min-height: 42px; }
+.control-row,
+.control-fields {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.control-row .control-num { flex: 1 1 auto; }
+.control-fields { margin-top: 4px; }
+.control-fields .control-num.small { flex: 0 0 88px; width: 88px; }
+.control-fields .control-select { flex: 0 0 auto; width: auto; }
+.control-fields .control-num:not(.small) { flex: 1 1 120px; }
+.manual-hint { margin-bottom: 8px; }
+.ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* arm-switch tile spans the whole row */
+.tile.arm { grid-column: 1 / -1; }
+.tile.arm.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.primary.danger { background: var(--danger); color: #fff; }
+.primary.danger:active { filter: brightness(0.92); }
+
+/* confirm dialog sits centred, not bottom-anchored */
+#confirmOverlay { align-items: center; padding: 16px; }
+.sheet.confirm { border-radius: 18px; max-width: 420px; }
+.overlay .sheet.confirm { transform: translateY(24px) scale(0.98); }
+.overlay.open .sheet.confirm { transform: none; }
 
 /* segmented enum control */
 .segment {

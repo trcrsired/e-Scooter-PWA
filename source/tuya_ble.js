@@ -8,7 +8,8 @@
  * (PlusPlus-ua, MIT), which itself derives from redphx/poc-tuya-ble-fingerbot.
  *
  * Layers, bottom to top:
- *   GATT:      write 0x2b11, notify 0x2b10 (service 0xa201 / 0x1910)
+ *   GATT:      v3 = write 0x2b11 / notify 0x2b10 (service 0xa201/0x1910);
+ *              v4 = write 00000001-…07d0 / notify 00000002-…07d0 (service 0xfd50)
  *   transport: 20-byte chunks, varint sub-packet number; first chunk also
  *              carries varint total length + (protocol_version << 4)
  *   security:  flag(1) | iv(16) | AES-128-CBC(frame)
@@ -21,13 +22,31 @@
 (function (global) {
   "use strict";
 
+  // v3 = classic Tuya BLE (service 0xa201 / 0x1910, chars 2b10/2b11, 1-byte DP
+  // length, empty device-info request). v4 = newer generation (service 0xfd50,
+  // write 00000001-…07d0, notify 00000002-…07d0, 2-byte DP length, device-info
+  // request [0x00,0xF3]). See TuyaOS BLE porting docs and ha_tuya_ble#160.
+  const SERVICE_UUID_V3 = "0000a201-0000-1000-8000-00805f9b34fb";
+  const WRITE_UUID_V3 = "00002b11-0000-1000-8000-00805f9b34fb";
+  const NOTIFY_UUID_V3 = "00002b10-0000-1000-8000-00805f9b34fb";
+
+  const SERVICE_UUID_V4 = "0000fd50-0000-1000-8000-00805f9b34fb";
+  const WRITE_UUID_V4 = "00000001-0000-1001-8001-00805f9b07d0";
+  const NOTIFY_UUID_V4 = "00000002-0000-1001-8001-00805f9b07d0";
+
   const SERVICE_UUIDS = [
-    "0000a201-0000-1000-8000-00805f9b34fb",
+    SERVICE_UUID_V3,
     "00001910-0000-1000-8000-00805f9b34fb",
+    SERVICE_UUID_V4,
   ];
-  const WRITE_UUID = "00002b11-0000-1000-8000-00805f9b34fb";
-  const NOTIFY_UUID = "00002b10-0000-1000-8000-00805f9b34fb";
+  const WRITE_UUID = WRITE_UUID_V3;
+  const NOTIFY_UUID = NOTIFY_UUID_V3;
   const GATT_MTU = 20;
+
+  // device-info request payload per generation (v4 boards drop the link if the
+  // request is empty — ha_tuya_ble#160 / jmdevita/tuya_eboard).
+  const DEVICE_INFO_PAYLOAD_V3 = new Uint8Array(0);
+  const DEVICE_INFO_PAYLOAD_V4 = Uint8Array.of(0x00, 0xf3);
 
   const CODE = {
     DEVICE_INFO: 0x0000,
@@ -208,6 +227,7 @@
 
     this.seq = 1;
     this.protocolVersion = 2;
+    this.generation = 3;     // 3 = classic (2b10/2b11), 4 = newer (fd50/…07d0)
     this.keyLogin = null;    // md5(login_key)          -> security flag 4
     this.keySession = null;  // md5(login_key + srand)  -> security flag 5
     this.keyAuth = null;     // device auth_key         -> security flag 1
@@ -262,8 +282,8 @@
         const u = c.uuid.toLowerCase();
         this.log("  char " + sh(u) + " [" +
           Object.keys(c.properties).filter(k => c.properties[k]).join(",") + "]");
-        if (u === WRITE_UUID) writeChar = c;
-        else if (u === NOTIFY_UUID) notifyChar = c;
+        if (u === WRITE_UUID || u === WRITE_UUID_V4) writeChar = c;
+        else if (u === NOTIFY_UUID || u === NOTIFY_UUID_V4) notifyChar = c;
         if (c.properties.write || c.properties.writeWithoutResponse) sw.push(c);
         if (c.properties.notify || c.properties.indicate) sn.push(c);
       }
@@ -271,10 +291,10 @@
     }
 
     if (!writeChar || !notifyChar) {
-      // Prefer a service whose UUID looks like Tuya (a201/1910); otherwise,
+      // Prefer a service whose UUID looks like Tuya (a201/1910/fd50); otherwise,
       // if exactly one service exposes both a writable and a notifiable
       // characteristic, use that pair.
-      const tuya = pairs.find(p => /a201|1910/.test(String(p.uuid).toLowerCase()));
+      const tuya = pairs.find(p => /a201|1910|fd50/.test(String(p.uuid).toLowerCase()));
       const both = pairs.filter(p => p.sw.length && p.sn.length);
       const pick = tuya || (both.length === 1 ? both[0] : null);
       if (pick) {
@@ -285,6 +305,16 @@
         this.log("ambiguous: " + both.length +
           " services expose write+notify and none matched a Tuya UUID");
       }
+    }
+
+    // Which protocol generation are we talking to?
+    const wu = writeChar ? writeChar.uuid.toLowerCase() : "";
+    const nu = notifyChar ? notifyChar.uuid.toLowerCase() : "";
+    if (wu === WRITE_UUID_V4 || nu === NOTIFY_UUID_V4 ||
+        (wu === WRITE_UUID_V4 && nu === NOTIFY_UUID_V4)) {
+      this.generation = 4;
+    } else {
+      this.generation = 3;
     }
     return { writeChar, notifyChar, services };
   };
@@ -303,7 +333,12 @@
     }
     this.writeChar = writeChar;
     this.notifyChar = notifyChar;
-    this.log("write=" + writeChar.uuid + "  notify=" + notifyChar.uuid);
+    // For the transport version byte on the very first (device-info) request we
+    // need the protocol version before the device tells us. A v4 board answers
+    // in v4 framing, so announce v4 up front.
+    if (this.generation === 4) this.protocolVersion = 4;
+    this.log("generation v" + this.generation + "  write=" + writeChar.uuid +
+      "  notify=" + notifyChar.uuid);
 
     await notifyChar.startNotifications();
     notifyChar.addEventListener("characteristicvaluechanged", this._onNotify);
@@ -321,8 +356,9 @@
 
   /* ---- handshake ---- */
   TuyaBLE.prototype._handshake = async function () {
-    this.log("→ device info request");
-    const info = await this.send(CODE.DEVICE_INFO, new Uint8Array(0), { timeout: 8000 });
+    const infoPayload = this.generation === 4 ? DEVICE_INFO_PAYLOAD_V4 : DEVICE_INFO_PAYLOAD_V3;
+    this.log("→ device info request" + (this.generation === 4 ? " ([00 f3], v4)" : ""));
+    const info = await this.send(CODE.DEVICE_INFO, infoPayload, { timeout: 8000 });
     if (!this.keySession) throw new Error("handshake failed: session key not derived");
     this.log("device info ok (bound=" + this.isBound + ", protocol=" + this.protocolVersion + ")");
 
@@ -417,7 +453,7 @@
           this.pending.delete(seq);
           reject(new Error("timeout waiting for response to 0x" + code.toString(16) +
             (code === CODE.DEVICE_INFO
-              ? " — device did not answer the handshake (it may use the newer Tuya secure protocol / different local_key)"
+              ? " — device did not answer the handshake (check local_key/device_id/uuid; make sure the scooter isn't already connected to the app)"
               : "")));
         }, opts.timeout || 15000);
         this.pending.set(seq, { resolve, reject, timer, code });
@@ -526,7 +562,7 @@
       case CODE.DEVICE_INFO:
         this.log("device info data: " + hex(data));
         if (data.length >= 14) {
-          this.protocolVersion = data[2] || 2;
+          this.protocolVersion = data[2] || this.generation;
           this.flags = data[4];
           this.isBound = data[5] !== 0;
           const srand = data.subarray(6, 12);
@@ -564,15 +600,15 @@
         break;
 
       case CODE.RECV_DP_V4:
-        // v4 report: version(1) | sn(4) | type(1) | flag(1) | KLV(len 2B)
+        // v4 report: 7-byte header (sn:4 | s_type:1 | s_mode:1 | s_ack:1) then
+        // datapoints with 2-byte big-endian length fields. The reference does
+        // not acknowledge v4 reports (jmdevita/tuya_eboard), so neither do we.
         for (const dp of parseKlv(data, 2, 7)) this.onDp(dp);
-        this._ack(seq, code, new Uint8Array(0));
         break;
 
       case CODE.RECV_TIME_DP_V4:
         // as above + time type(1) | timestamp(4)
         for (const dp of parseKlv(data, 2, 12)) this.onDp(dp);
-        this._ack(seq, code, new Uint8Array(0));
         break;
 
       case CODE.RECV_TIME1_REQ:
@@ -632,8 +668,9 @@
         dps.map(function (d) { return "dp " + d.id + " = " + d.value; }).join(", "));
       return Promise.resolve();
     }
-    const raw = encodeKlv(dps, 1);
-    return this.send(CODE.DPS, raw, { wait: false }).catch(() => {});
+    const raw = encodeKlv(dps, this.generation === 4 ? 2 : 1);
+    const code = this.generation === 4 ? CODE.DPS_V4 : CODE.DPS;
+    return this.send(code, raw, { wait: false }).catch(() => {});
   };
 
   TuyaBLE.prototype.sendDp = function (id, type, value) {

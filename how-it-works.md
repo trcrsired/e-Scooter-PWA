@@ -22,9 +22,9 @@ facts marked ✅ are confirmed, ❓ are hypotheses to verify.
 │  Tuya BLE frames: seq | type | len | data   │
 │  + CRC16, payload AES-encrypted (see §4)    │
 ├─────────────────────────────────────────────┤
-│  GATT writes to char 0x2b11                 │
-│  notifications from char 0x2b10             │
-│  (service 0xa201 / 0x1910 — Tuya BLE)       │
+│  GATT write (v3: 0x2b11 · v4: 00000001-…07d0)  │
+│  notifications (v3: 0x2b10 · v4: 00000002-…07d0)│
+│  (v3 service 0xa201/0x1910 · v4 service 0xfd50) │
 ├─────────────────────────────────────────────┤
 │  BLE link (this part already works → beep)  │
 └─────────────────────────────────────────────┘
@@ -39,19 +39,20 @@ Web Bluetooth only grants access to services declared upfront in
 `requestDevice()`, so the probe in `app.js` declares a broad candidate
 list and enumerates whatever exists. Two outcomes:
 
-### Outcome A — service `0x1910` is present
+### Outcome A — a Tuya BLE service is present
 
-Standard Tuya BLE. Then the GATT table is almost certainly:
+Two generations exist and are auto-detected from the advertised service
+(`source/tuya_ble.js`):
 
-| UUID | Role |
-|---|---|
-| `00001910-...` | Tuya BLE serial service |
-| `00002b10-...` | write (commands from us → scooter) |
-| `00002b11-...` | notify (replies/events → us) |
+| Gen | Service | Write char | Notify char | Device-info req | DP length |
+|---|---|---|---|---|---|
+| v3 | `0xa201` / `0x1910` | `00002b11-…34fb` | `00002b10-…34fb` | empty | 1 byte |
+| **v4** | `0xfd50` | `00000001-0000-1001-8001-00805f9b07d0` | `00000002-0000-1001-8001-00805f9b07d0` | `[0x00,0xF3]` | 2 bytes (BE) |
 
-We then implement the real Tuya BLE protocol (§4). Reference
-implementation to port to JS: the **`tuya_ble` Python package**
-(used by the `ha_tuya_ble` Home Assistant integration on GitHub).
+**This scooter is v4** (confirmed from its GATT table: chars `…0001`/`…0002`
+under service `0xfd50`). Everything below the GATT layer is shared. Reference:
+Tuya's BLE porting docs + `PlusPlus-ua/ha_tuya_ble` + `jmdevita/tuya_eboard`
+(which documents the v4 generation).
 
 ### Outcome B — some vendor service instead
 
@@ -65,15 +66,16 @@ Conceptual sketch — exact byte layout to be confirmed against the
 `tuya_ble` source and our capture:
 
 1. **Framing.** Each logical packet is
-   `seq(2B) | type(1-2B) | length(2B) | payload | CRC16(2B)`.
-   BLE MTU is small, so packets are split into ~20-byte chunks and
+   `seq(4B) | response_to(4B) | code(2B) | length(2B) | payload | CRC16(2B)`,
+   AES-128-CBC encrypted (see §4a). BLE MTU is small, so packets are
+   split into ~20-byte chunks (varint sub-packet number; the first chunk
+   also carries the total length + `protocol_version << 4`) and
    reassembled on the other side.
-2. **Handshake.** Some commands are unencrypted, e.g. *device info*
-   (returns device_id, product id, firmware version, bound flag) and
-   *pair*. The pair exchange mixes random numbers from both sides to
-   derive a **session key** — roughly `MD5(login_key + randoms)`,
-   then AES-128-ECB-encrypts payloads from then on. ✅ AES-128-ECB
-   (confirmed against `tuya_ble`: `AES.new(key, AES.MODE_ECB)`)
+2. **Handshake.** *Device info* is encrypted with `login_key = md5(local_key[0:6])`
+   (security flag 4, empty IV-derived CBC); the reply carries the 6-byte
+   `srand` and the auth key. The *pair* request then uses the session key
+   `md5(local_key[0:6] + srand)` (security flag 5). ✅ AES-128-**CBC** with a
+   per-packet random IV (the old "AES-128-ECB" note was wrong).
 3. **Credentials.** `login_key`/`local_key`/`device_id`/`uuid` are
    issued by Tuya cloud when the device is bound and are **static**
    afterwards — they do not rotate per session. Since the scooter is
@@ -156,18 +158,20 @@ comes from two sources:
 
 ## 8. Open questions
 
-- ❓ Is service `0xa201`/`0x1910` actually present? (the app now logs whatever
-  it finds; `write 0x2b11` / `notify 0x2b10` is preferred, else the single
-  writable/notifiable characteristic)
-- ✅ Protocol version the firmware speaks (v3/v4 differ in packet layout) — read
-  from device-info reply byte [2]; classic (flag 4/5) frames are implemented
+- ✅ GATT layout — this scooter is **v4** (service `0xfd50`, chars `…0001`
+  write / `…0002` notify); v3 (`0xa201`, `2b10`/`2b11`) also supported
+- ✅ Protocol version — read from device-info reply byte [2]; the app sends
+  the v4 device-info payload `[0x00,0xF3]` and 2-byte DP lengths
 - ❓ Which DP IDs map to lock / speed / lights / cruise / battery — taken
-  automatically from the `functions`/`status` arrays in `keys.json`
+  automatically from the `functions`/`status` arrays in `keys.json`, or
+  observed live on the wire (shown as tiles)
+- ❓ Exact v4 DP-*send* framing — implemented as code `0x0027` with 2-byte
+  lengths; neither reference project sends v4 DPs, so verify a benign DP
+  (e.g. light) before trusting anything that affects motion
 - ✅ Handshake runs on every connection (device info → pair → state query),
   implemented in `source/tuya_ble.js`
-- ❓ Classic (flag 4/5) vs secure-V2 (modes 11–16, see `../TuyaOpen/src/
-  tuya_cloud_service/ble/`) — if the handshake times out the scooter is likely
-  secure-V2 and that path still needs porting
+- ✅ Classic (flag 4/5) CBC frames — confirmed working path; secure-V2
+  (modes 11–16, see `../TuyaOpen/…/ble/`) is not needed for this device
 
 ## 9. Reference material in this workspace
 

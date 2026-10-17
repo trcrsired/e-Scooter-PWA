@@ -32,11 +32,24 @@ const i18n = {
     wasm_missing: "tuya_crypto.wasm not found — run the build in cpp/",
     section_controls: "Controls",
     section_status: "Status",
-    section_datapoints: "Datapoints (read-only)",
-    observe_notice: "Observe-only mode: this app will not send any commands to the scooter. It only authenticates and displays the datapoints the scooter reports.",
+    section_datapoints: "Datapoints",
+    write_notice: "Live mode: every change you confirm here is sent to the scooter. Only adjust settings you understand — the scooter can move, unlock, or change speed. When in doubt, disconnect first.",
+    arm_label: "Enable sending commands",
+    arm_hint: "Off: the app only reads. On: controls become live and can change the scooter.",
     controls_empty: "Connect to the scooter to load its controls.",
     read_only: "read-only",
+    writable: "writable",
     send: "Send",
+    confirm_title: "Send to scooter?",
+    confirm_body: (dp, val) => `datapoint ${dp} → ${val}`,
+    confirm_send: "Send",
+    confirm_cancel: "Cancel",
+    manual_title: "Manual datapoint",
+    manual_hint: "Advanced: send a raw datapoint by id, type and value.",
+    manual_id: "DP id",
+    manual_type: "Type",
+    manual_value: "Value",
+    manual_send: "Send",
     diagnostics: "Diagnostics",
     clear_log: "Clear log",
     copy_log: "Copy log",
@@ -74,11 +87,24 @@ const i18n = {
     wasm_missing: "未找到 tuya_crypto.wasm —— 请在 cpp/ 中构建",
     section_controls: "控制",
     section_status: "状态",
-    section_datapoints: "数据点（只读）",
-    observe_notice: "仅观察模式：本应用不会向滑板车发送任何指令，只进行认证并显示滑板车上报的数据点。",
+    section_datapoints: "数据点",
+    write_notice: "实时模式：你确认的每次更改都会发送到滑板车。请只调整你理解的项目 —— 滑板车可能会移动、解锁或改变速度。不确定时请先断开连接。",
+    arm_label: "启用命令发送",
+    arm_hint: "关闭：仅读取。开启：控制项生效，可改变滑板车状态。",
     controls_empty: "连接滑板车后即可加载控制项。",
     read_only: "只读",
+    writable: "可写",
     send: "发送",
+    confirm_title: "发送到滑板车？",
+    confirm_body: (dp, val) => `数据点 ${dp} → ${val}`,
+    confirm_send: "发送",
+    confirm_cancel: "取消",
+    manual_title: "手动数据点",
+    manual_hint: "高级：按 id、类型、数值发送原始数据点。",
+    manual_id: "数据点 id",
+    manual_type: "类型",
+    manual_value: "数值",
+    manual_send: "发送",
     diagnostics: "诊断",
     clear_log: "清空日志",
     copy_log: "复制日志",
@@ -105,6 +131,8 @@ const keyInput = $("keyInput");
 const devIdInput = $("devIdInput");
 const uuidInput = $("uuidInput");
 const keysStatus = $("keysStatus");
+const confirmOverlay = $("confirmOverlay");
+const confirmBody = $("confirmBody");
 
 // -------------------------
 // 3. Localization of static UI
@@ -121,7 +149,11 @@ $("saveKeysBtn").textContent = t.save;
 $("diagSummary").textContent = t.diagnostics;
 $("clearLogBtn").textContent = t.clear_log;
 $("copyLogBtn").textContent = t.copy_log;
-$("safetyNote").textContent = t.observe_notice;
+$("safetyNote").textContent = t.write_notice;
+$("safetyNote").classList.add("warn");
+$("confirmTitle").textContent = t.confirm_title;
+$("confirmCancelBtn").textContent = t.confirm_cancel;
+$("confirmSendBtn").textContent = t.confirm_send;
 document.documentElement.lang = lang;
 
 // -------------------------
@@ -309,6 +341,7 @@ function parseValues(spec) {
 function registerDpEl(dpId, update) {
   if (!dpUi.has(dpId)) dpUi.set(dpId, []);
   dpUi.get(dpId).push(update);
+  if (lastDp.has(dpId)) update(lastDp.get(dpId)); // replay the last known value
 }
 
 function rawToDisplay(v, scale) { return scale ? v / Math.pow(10, scale) : v; }
@@ -330,7 +363,7 @@ function formatDpValue(dpDef, v) {
 }
 
 // Read-only tile: shows a datapoint's identity and its live reported value.
-// Observe-only — there is deliberately no control element that can send.
+// Used for status datapoints and for every datapoint while commands are disarmed.
 function makeTile(dpDef) {
   const dpId = dpDef.dp_id;
   const tile = document.createElement("div");
@@ -361,37 +394,310 @@ function sectionTitle(text) {
   return h;
 }
 
-// Observe-only: every datapoint (both the writable "functions" and the
-// read-only "status" list) is rendered as a read-only tile. There is no
-// element in the DOM that can send a command.
+// ---- confirmation for outgoing commands (non-blocking) ----
+let _confirmResolve = null;
+function askConfirm(label, valueText) {
+  if (!tuya) return Promise.resolve(false);
+  confirmBody.textContent = t.confirm_body(label, valueText);
+  confirmOverlay.hidden = false;
+  requestAnimationFrame(() => confirmOverlay.classList.add("open"));
+  return new Promise(resolve => { _confirmResolve = resolve; });
+}
+function closeConfirm(result) {
+  confirmOverlay.classList.remove("open");
+  setTimeout(() => { confirmOverlay.hidden = true; }, 250);
+  const r = _confirmResolve; _confirmResolve = null;
+  if (r) r(result);
+}
+$("confirmCancelBtn").onclick = () => closeConfirm(false);
+$("confirmSendBtn").onclick = () => closeConfirm(true);
+confirmOverlay.addEventListener("click", e => { if (e.target === confirmOverlay) closeConfirm(false); });
+
+// The ONLY function that writes to the scooter. It requires the arm-switch to
+// be on (tuya.allowWrites), shows a confirmation, and reverts the control if
+// the user declines.
+function requestSend(dpId, dt, rawValue, displayText, revert) {
+  if (!armed || !tuya) return;
+  askConfirm("dp " + dpId, displayText).then(ok => {
+    if (!ok) { if (revert) revert(); return; }
+    log("→ dp " + dpId + " = " + (rawValue instanceof Uint8Array ? hex(rawValue) : rawValue));
+    tuya.sendDp(dpId, dt, rawValue);
+  });
+}
+
+// Interactive control for a writable (function) datapoint.
+function makeControl(dpDef) {
+  const dpId = dpDef.dp_id;
+  const dt = specToDt(dpDef.type);
+  const values = parseValues(dpDef);
+
+  const tile = document.createElement("div");
+  tile.className = "tile tile-control";
+
+  const lab = document.createElement("div");
+  lab.className = "tile-label";
+  lab.textContent = dpDef.code || ("dp " + dpId);
+
+  const meta = document.createElement("div");
+  meta.className = "tile-meta";
+  meta.textContent = "dp " + dpId + " · " + (dpDef.type || "?") + " · " + t.writable;
+
+  const val = document.createElement("div");
+  val.className = "tile-value";
+  val.textContent = "–";
+
+  tile.appendChild(lab);
+  tile.appendChild(meta);
+
+  let apply = function () {};
+
+  if (dt === DT.BOOL) {
+    const wrap = document.createElement("label");
+    wrap.className = "switch";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    const knob = document.createElement("span");
+    knob.className = "slider";
+    wrap.appendChild(input);
+    wrap.appendChild(knob);
+    input.addEventListener("change", () => {
+      const want = input.checked ? 1 : 0;
+      requestSend(dpId, DT.BOOL, want, input.checked ? t.on : t.off,
+        () => { input.checked = !input.checked; });
+    });
+    apply = v => { input.checked = !!v; };
+    tile.appendChild(wrap);
+    tile.appendChild(val);
+  } else if (dt === DT.ENUM) {
+    const range = Array.isArray(values.range) ? values.range : [];
+    const sel = document.createElement("select");
+    sel.className = "control-select";
+    range.forEach((label, i) => {
+      const o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = label;
+      sel.appendChild(o);
+    });
+    sel.addEventListener("change", () => {
+      const v = Number(sel.value);
+      requestSend(dpId, DT.ENUM, v, formatDpValue(dpDef, v), null);
+    });
+    apply = v => { sel.value = String(v); };
+    tile.appendChild(sel);
+    tile.appendChild(val);
+  } else if (dt === DT.VALUE || dt === DT.BITMAP) {
+    const scale = Number(values.scale || 0);
+    const step = scale ? Math.pow(10, -scale) : 1;
+    const num = document.createElement("input");
+    num.type = "number";
+    num.className = "control-num";
+    num.step = String(step);
+    if (values.min !== undefined) num.min = String(rawToDisplay(Number(values.min), scale));
+    if (values.max !== undefined) num.max = String(rawToDisplay(Number(values.max), scale));
+    const btn = document.createElement("button");
+    btn.className = "ghost";
+    btn.textContent = t.send;
+    btn.onclick = () => {
+      const raw = displayToRaw(Number(num.value), scale);
+      requestSend(dpId, dt, raw, formatDpValue(dpDef, raw), null);
+    };
+    apply = v => { if (document.activeElement !== num) num.value = String(rawToDisplay(v, scale)); };
+    const row = document.createElement("div");
+    row.className = "control-row";
+    row.appendChild(num);
+    row.appendChild(btn);
+    tile.appendChild(row);
+    tile.appendChild(val);
+  } else {
+    // string / raw: free-form bytes
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "control-num";
+    const btn = document.createElement("button");
+    btn.className = "ghost";
+    btn.textContent = t.send;
+    btn.onclick = () => {
+      const bytes = new TextEncoder().encode(inp.value);
+      requestSend(dpId, dt, bytes, inp.value, null);
+    };
+    apply = v => { if (document.activeElement !== inp) inp.value = v instanceof Uint8Array ? hex(v) : String(v); };
+    const row = document.createElement("div");
+    row.className = "control-row";
+    row.appendChild(inp);
+    row.appendChild(btn);
+    tile.appendChild(row);
+    tile.appendChild(val);
+  }
+
+  registerDpEl(dpId, v => { val.textContent = formatDpValue(dpDef, v); apply(v); });
+  return tile;
+}
+
+// ---- global control state ----
+let armed = false;               // whether the user has enabled sending
+const lastDp = new Map();        // dp_id -> last reported value
+const observed = new Set();      // dp_ids seen on the wire
+let specIds = new Set();         // dp_ids described by the loaded spec
+
+function armSwitchEl() {
+  const tile = document.createElement("div");
+  tile.className = "tile tile-control arm" + (armed ? " on" : "");
+
+  const lab = document.createElement("div");
+  lab.className = "tile-label";
+  lab.textContent = t.arm_label;
+
+  const hint = document.createElement("div");
+  hint.className = "tile-meta";
+  hint.textContent = t.arm_hint;
+
+  const wrap = document.createElement("label");
+  wrap.className = "switch";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = armed;
+  input.disabled = !tuya;
+  const knob = document.createElement("span");
+  knob.className = "slider";
+  wrap.appendChild(input);
+  wrap.appendChild(knob);
+  input.addEventListener("change", () => {
+    armed = input.checked;
+    if (tuya) tuya.allowWrites = armed;
+    log("commands " + (armed ? "ENABLED" : "disabled"));
+    buildControls(deviceSpec);
+  });
+
+  tile.appendChild(lab);
+  tile.appendChild(hint);
+  tile.appendChild(wrap);
+  return tile;
+}
+
+function addObservedTile(id) {
+  if (specIds.has(id)) return; // already shown via the spec
+  const el = document.getElementById("observedTiles");
+  if (!el || el.querySelector('[data-dp="' + id + '"]')) return;
+  const tile = makeTile({ dp_id: id, type: "observed", code: "" });
+  tile.dataset.dp = String(id);
+  el.appendChild(tile);
+}
+
+function buildManual() {
+  const sec = document.createElement("section");
+  sec.className = "section";
+  sec.appendChild(sectionTitle(t.manual_title));
+
+  const hint = document.createElement("div");
+  hint.className = "tile-meta manual-hint";
+  hint.textContent = t.manual_hint;
+  sec.appendChild(hint);
+
+  const idIn = document.createElement("input");
+  idIn.type = "number";
+  idIn.className = "control-num small";
+  idIn.placeholder = t.manual_id;
+
+  const typeSel = document.createElement("select");
+  typeSel.className = "control-select";
+  for (const name of ["boolean", "value", "enum", "string", "bitmap", "raw"]) {
+    const o = document.createElement("option");
+    o.value = name;
+    o.textContent = name;
+    typeSel.appendChild(o);
+  }
+
+  const valIn = document.createElement("input");
+  valIn.type = "text";
+  valIn.className = "control-num";
+  valIn.placeholder = t.manual_value;
+
+  const btn = document.createElement("button");
+  btn.className = "ghost";
+  btn.textContent = t.manual_send;
+  btn.disabled = !armed;
+  btn.onclick = () => {
+    const id = Number(idIn.value);
+    if (!armed || !tuya || !Number.isFinite(id)) return;
+    const dt = specToDt(typeSel.value);
+    let raw;
+    if (dt === DT.BOOL) raw = /^(1|true|on|yes)$/i.test(valIn.value.trim()) ? 1 : 0;
+    else if (dt === DT.VALUE || dt === DT.ENUM || dt === DT.BITMAP) raw = parseInt(valIn.value, 10) || 0;
+    else raw = new TextEncoder().encode(valIn.value);
+    requestSend(id, dt, raw, valIn.value, null);
+  };
+
+  const fields = document.createElement("div");
+  fields.className = "control-fields";
+  fields.appendChild(idIn);
+  fields.appendChild(typeSel);
+  fields.appendChild(valIn);
+  fields.appendChild(btn);
+  sec.appendChild(fields);
+  return sec;
+}
+
+// Build the whole controls area: the arm-switch, then spec-driven controls
+// (interactive only when armed), status tiles, live observed tiles, and a
+// manual sender for datapoints we don't have a spec for yet.
 function buildControls(spec) {
   controlsEl.textContent = "";
   dpUi.clear();
-  if (!spec) return;
 
-  const all = [...(spec.functions || []), ...(spec.status || [])];
-  if (!all.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty";
-    empty.textContent = t.controls_empty;
-    controlsEl.appendChild(empty);
-    return;
+  const funcs = (spec && spec.functions) || [];
+  const status = (spec && spec.status) || [];
+  specIds = new Set([...funcs, ...status].map(d => d.dp_id));
+
+  const armSec = document.createElement("section");
+  armSec.className = "section";
+  const armWrap = document.createElement("div");
+  armWrap.className = "tiles";
+  armWrap.appendChild(armSwitchEl());
+  armSec.appendChild(armWrap);
+  controlsEl.appendChild(armSec);
+
+  if (funcs.length) {
+    const sec = document.createElement("section");
+    sec.className = "section";
+    sec.appendChild(sectionTitle(t.section_controls));
+    const tiles = document.createElement("div");
+    tiles.className = "tiles";
+    for (const dp of funcs) tiles.appendChild(armed ? makeControl(dp) : makeTile(dp));
+    sec.appendChild(tiles);
+    controlsEl.appendChild(sec);
   }
 
-  const sec = document.createElement("section");
-  sec.className = "section";
-  sec.appendChild(sectionTitle(t.section_datapoints));
-  const tiles = document.createElement("div");
-  tiles.className = "tiles";
-  for (const dp of all) tiles.appendChild(makeTile(dp));
-  sec.appendChild(tiles);
-  controlsEl.appendChild(sec);
+  if (status.length) {
+    const sec = document.createElement("section");
+    sec.className = "section";
+    sec.appendChild(sectionTitle(t.section_status));
+    const tiles = document.createElement("div");
+    tiles.className = "tiles";
+    for (const dp of status) tiles.appendChild(makeTile(dp));
+    sec.appendChild(tiles);
+    controlsEl.appendChild(sec);
+  }
+
+  const obsSec = document.createElement("section");
+  obsSec.className = "section";
+  obsSec.appendChild(sectionTitle(t.section_datapoints));
+  const obsTiles = document.createElement("div");
+  obsTiles.className = "tiles";
+  obsTiles.id = "observedTiles";
+  obsSec.appendChild(obsTiles);
+  controlsEl.appendChild(obsSec);
+  for (const id of observed) addObservedTile(id);
+
+  controlsEl.appendChild(buildManual());
 }
 
 function onDp(dp) {
+  lastDp.set(dp.id, dp.value);
+  observed.add(dp.id);
   log("← dp " + dp.id + " = " + (dp.value instanceof Uint8Array ? hex(dp.value) : dp.value));
   const handlers = dpUi.get(dp.id);
   if (handlers) for (const fn of handlers) fn(dp.value);
+  addObservedTile(dp.id);
 }
 
 // -------------------------
@@ -429,6 +735,7 @@ connectBtn.onclick = async () => {
     tuya = null;
     setConnected(false);
     setStatus(t.status_disconnected, "");
+    buildControls(deviceSpec);
     return;
   }
 
@@ -466,13 +773,16 @@ connectBtn.onclick = async () => {
       onReady: () => {
         setStatus(t.status_connected(device.name || device.id), "is-connected");
         setConnected(true);
+        buildControls(deviceSpec); // enable the arm-switch / manual sender now we're connected
       },
     });
+    tuya.allowWrites = armed; // hard guard in the library mirrors the UI arm-switch
 
     device.addEventListener("gattserverdisconnected", () => {
       setStatus(t.status_disconnected, "");
       setConnected(false);
       tuya = null;
+      buildControls(deviceSpec);
     });
 
     setStatus(t.status_connGatt, "is-busy");
@@ -531,10 +841,6 @@ $("copyLogBtn").onclick = async () => {
   } else {
     log(t.keys_none);
     buildControls(null);
-    const empty = document.createElement("div");
-    empty.className = "empty";
-    empty.textContent = t.controls_empty;
-    controlsEl.appendChild(empty);
   }
   if (!ok) log("(connect is disabled until the crypto module loads)");
   log("secure context: " + window.isSecureContext);
