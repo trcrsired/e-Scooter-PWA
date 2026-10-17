@@ -35,8 +35,8 @@ Open it from a secure context (localhost, `adb reverse`, or HTTPS), click
 `uuid` in Settings — or use **Load JSON config** there to import a Tuya device
 JSON (or the `keys.json` produced by `tools/fetch_keys.py`). If that file also
 contains the datapoint `functions`/`status` spec, the writable/read-only tiles
-are built from it. Sending is **armed by default**; each send still asks for
-confirmation, and you can turn sending off in Debug.
+are built from it. Sending is **armed by default**; the raw Debug controls ask
+for confirmation before each send, and you can turn sending off in Debug.
 
 To reconnect later, just tap **Connect to scooter** again: the app remembers the
 Bluetooth device it was last allowed to use and, on browsers that expose
@@ -50,22 +50,30 @@ longer fetches anything from the server on its own.
 
 ## Screens
 
-The main area has two tabs:
+The main area has two tabs (the **Debug** tab is hidden by default — tap the
+version number in the header five times to reveal the whole tab bar, five more
+to hide it again; the choice is remembered in `localStorage`):
 
 - **Ride** — a speed dashboard. A big hero shows your *GPS* speed (from the
   browser's `navigator.geolocation`, Haversine distance + device doppler speed,
-  exponentially smoothed) with trip / max / average / elapsed time. Pick the
+  exponentially smoothed) with trip / max / average / elapsed time, plus your
+  live **GPS coordinates** (📍 latitude, longitude, 6 dp) while tracking. Pick the
   display unit (**km/h**, **mph** or **m/s**). Tracking is manual: press
   **Start tracking**. The scooter's own read-outs (battery, voltage, temp, and
   the lifetime odometer — dp 12, raw ÷ 10 = km) are
   shown as cards. A **mode selector** (🚶 Walk / 🍃 Eco / 🛴 行驶 / ⚡ 运动) shows
   the current ride mode from the gear datapoint (dp 15) and lets you switch it
-  (through the usual confirmation gate). A **lock toggle** (dp 1 — the scooter's
+  (**sent immediately, no confirmation gate** — switching gear is a routine,
+  reversible action). A **lock toggle** (dp 1 — the scooter's
   lock boolean, shown as 🔒 Locked / 🔓 Unlocked) and a **headlight toggle**
   (dp 8, 💡 On / 🔌 Off) sit side by side right under the hero. When the app
   first receives the headlight state and it is **night (18:00–06:00 local
   time)** with the light off, it suggests turning it on (a toast plus a pulsing
-  glow on the button, once per session).
+  glow on the button, once per session). Below them, a **Scooter controls**
+  panel holds the **start mode** selector (dp 16) and the **panel units**
+  switch (dp 11 — the speed unit on the scooter's *own* display, `0` = km/h,
+  `1` = mph, independent of the app's unit); both send directly and verify the
+  result with a read-back.
   An optional **speed announcement**
   toggle speaks the current speed with the Web Speech API every *N* seconds
   (default 30) for at most *M* times (`0` = unlimited) — kept minimal and spoken
@@ -107,14 +115,18 @@ The main area has two tabs:
   range before being sent, and the value input's `min`/`max` follow it. Ranges
   and values are stored per profile and saved even offline; **changing a range
   triggers an extra safety warning confirmation** (a high maximum can make the
-  scooter dangerously fast), and sending goes through the usual confirmation
-  gate; only the values that changed are written.
+  scooter dangerously fast); only the values that changed are written, each sent
+  directly.
 - **Start mode** — how the scooter pulls away from a standstill (dp 16, an
-  ENUM): `0` = start directly on the throttle, `1` = run/push to start. Shown as
-  a selector, written through the usual confirmation + read-back verification.
+  ENUM): `0` = start directly on the throttle, `1` = run/push to start. Lives on
+  the **Ride** dashboard (Scooter controls), shown as a selector, sent directly
+  and verified with a read-back.
+- **Panel units** — the speed unit on the scooter's own display (dp 11, a BOOL):
+  `0` = km/h, `1` = mph. Also on the **Ride** dashboard; independent of the
+  app's speed unit, sent directly and verified with a read-back.
 - **Auto-off time** — idle minutes before the scooter powers its radios off
   (dp 104, VALUE, range 5–90, default 60). Clamped to that range, stored per
-  profile, and written through the confirmation gate.
+  profile, and sent directly.
 - **Credential** — importing your scooter's JSON from the Tuya IoT platform is
   the preferred way (there is a short step-by-step guide and a link to
   <https://iot.tuya.com/> right there). Manual `local_key` / `device_id` /
@@ -137,8 +149,9 @@ The Debug **Dump datapoints (JSON)** export includes that timestamp too.
 
 ## Safety
 
-Sending is **armed by default** (remembered across sessions); each send still
-shows a confirmation, and you can turn sending off in Debug — the library then
+Sending is **armed by default** (remembered across sessions); the raw Debug
+controls show a confirmation before each send, while the Ride / Settings controls
+send directly, and you can turn sending off in Debug — the library then
 refuses datapoint writes while `allowWrites` is false. This scooter is Tuya BLE
 **v4**; because neither reference project sends v4 datapoints, verify a harmless
 datapoint (e.g. the light) before trusting any DP that can affect motion.

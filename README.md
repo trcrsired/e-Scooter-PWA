@@ -12,8 +12,9 @@ scooter's datapoints.
 ## What it does
 
 - **Ride dashboard** — a big GPS-speed hero with trip / max / average / elapsed
-  time, unit toggle (**km/h · mph · m/s**) and live scooter read-outs (battery,
-  voltage, temperature, total distance).
+  time and your live GPS coordinates (📍 lat, lon) when tracking, unit toggle
+  (**km/h · mph · m/s**) and live scooter read-outs (battery, voltage,
+  temperature, total distance).
 - **Voice announcements** — optional spoken speed every *N* seconds, with a
   choice of any speech voice the browser offers.
 - **Speed warning** — flash/vibrate/toast when you go faster than a limit you
@@ -24,13 +25,17 @@ scooter's datapoints.
   when you connect after dark (18:00–06:00).
 - **Speed limits** — set the Eco / D / S maximum speed (km/h) in Settings
   (datapoints 101 / 102 / 103), each with an editable allowed range.
-- **Start mode** — choose how the scooter pulls away (dp 16): start directly on
-  the throttle, or run/push to start.
+- **Start mode** — choose how the scooter pulls away (dp 16) right on the Ride
+  dashboard: start directly on the throttle, or run/push to start.
+- **Panel units** — switch the speed unit shown on the scooter's *own* display
+  between km/h and mph (dp 11), on the Ride dashboard. Independent of the app's
+  speed unit.
 - **Auto-off time** — how long the scooter stays on when idle before going
   offline (dp 104, 5–90 minutes, default 60).
 - **Debug view** — the raw datapoint controls, a manual datapoint sender, a
   button to dump every known datapoint to a timestamped JSON file, and a
-  diagnostics log.
+  diagnostics log. It is **hidden by default**: tap the version number in the
+  header five times to reveal it, and another five times to hide it again.
 - **Multiple scooters** — keep a list of profiles and switch between them in the
   UI; each profile can filter the Bluetooth chooser by device-name prefix.
 - **Offline last-seen state** — the last values each scooter reported are kept in
@@ -64,8 +69,9 @@ or HTTPS. Then:
    the Tuya IoT platform (<https://iot.tuya.com/> — there's a step-by-step guide
    in the app) or enter `local_key` / `device_id` / `uuid` by hand.
 
-Sending commands is armed by default, and every send still asks for
-confirmation.
+Sending commands is armed by default. The controls on the Ride dashboard and in
+Settings send straight to the scooter; only the raw **Debug** controls ask for a
+confirmation before each send.
 
 ## Safety
 

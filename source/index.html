@@ -58,6 +58,7 @@
         </div>
         <div class="speed-value"><span id="rideSpeed">0</span><span class="speed-unit" id="rideSpeedUnit">km/h</span></div>
         <div class="speed-state" id="rideGpsState"></div>
+        <div class="speed-state" id="rideGpsCoords"></div>
       </div>
 
       <div class="ride-controls">
@@ -68,6 +69,26 @@
           <span id="lightIcon" class="lock-icon"></span><span id="lightText"></span>
         </button>
       </div>
+
+      <section class="section">
+        <h2 id="scooterCtlTitle"></h2>
+        <div class="field">
+          <label id="startLabel" for="startSelect"></label>
+          <select id="startSelect">
+            <option value="0"></option>
+            <option value="1"></option>
+          </select>
+          <span id="startStatus" class="saved-note"></span>
+        </div>
+        <div class="field">
+          <label id="panelUnitLabel" for="panelUnitSelect"></label>
+          <select id="panelUnitSelect">
+            <option value="0"></option>
+            <option value="1"></option>
+          </select>
+          <span id="panelUnitStatus" class="saved-note"></span>
+        </div>
+      </section>
 
       <div class="ride-stats">
         <div class="stat"><div class="stat-label" id="lblTrip"></div><div class="stat-value"><span id="rideTrip">0.00</span><span class="stat-unit" id="rideTripUnit">km</span></div></div>
@@ -119,7 +140,7 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <nav class="tabbar">
+  <nav class="tabbar" hidden>
     <button id="tabRide" class="tab is-active"></button>
     <button id="tabDebug" class="tab"></button>
   </nav>
@@ -212,16 +233,6 @@
       <div class="sheet-actions">
         <button id="speedSaveBtn" class="primary" type="button"></button>
         <span id="speedStatus" class="saved-note"></span>
-      </div>
-
-      <h3 id="startTitle" class="sheet-section-title"></h3>
-      <div class="field">
-        <label id="startLabel" for="startSelect"></label>
-        <select id="startSelect">
-          <option value="0"></option>
-          <option value="1"></option>
-        </select>
-        <span id="startStatus" class="saved-note"></span>
       </div>
 
       <h3 id="offlineTitle" class="sheet-section-title"></h3>

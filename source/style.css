@@ -544,6 +544,7 @@ select { cursor: pointer; }
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
 }
+.tabbar[hidden] { display: none; }
 .tab {
   flex: 1 1 0;
   min-height: 44px;

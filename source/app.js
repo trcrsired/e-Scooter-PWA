@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.25";
+const APP_VERSION = "0.7.26";
 
 // -------------------------
 // 1. Localization dictionary
@@ -67,6 +67,8 @@ const i18n = {
     off: "Off",
     tab_ride: "Ride",
     tab_debug: "Debug",
+    dev_on: "Debug mode enabled",
+    dev_off: "Debug mode hidden",
     ride_scooter: "Scooter",
     trip: "Trip",
     max: "Max",
@@ -95,6 +97,7 @@ const i18n = {
     dp_odometer: "total distance",
     dp_gear: "ride mode (gear)",
     dp_start_mode: "start mode",
+    dp_panel_unit: "panel units",
     dp_temp: "temperature",
     dp_voltage: "voltage",
     dp_speed_eco: "Eco speed limit",
@@ -172,12 +175,20 @@ const i18n = {
     range_warn_ok: "I understand \u2014 change it",
     range_warn_cancel: "Keep current range",
     start_title: "Start mode",
+    scooter_ctl_title: "Scooter controls",
     start_label: "How the scooter starts from a standstill (dp 16)",
     start_direct: "Start directly (throttle)",
     start_run: "Run/push to start",
     start_sent: "Start mode sent",
     start_applied: v => `Start mode confirmed: ${v}`,
     start_rejected: v => `Start mode not applied (still ${v})`,
+    panel_unit_title: "Panel units",
+    panel_unit_label: "Speed unit shown on the scooter's own display (dp 11)",
+    panel_unit_kmh: "km/h",
+    panel_unit_mph: "mph",
+    panel_unit_sent: "Panel unit sent",
+    panel_unit_applied: v => `Panel unit confirmed: ${v}`,
+    panel_unit_rejected: v => `Panel unit not applied (still ${v})`,
     offline_title: "Auto-off time",
     offline_label: "Idle time before the scooter powers off (dp 104, minutes, 5\u201390)",
     offline_save: "Send auto-off time",
@@ -250,6 +261,8 @@ const i18n = {
     off: "关",
     tab_ride: "骑行",
     tab_debug: "调试",
+    dev_on: "已开启调试模式",
+    dev_off: "已隐藏调试模式",
     ride_scooter: "滑板车",
     trip: "里程",
     max: "最高",
@@ -355,12 +368,20 @@ const i18n = {
     range_warn_ok: "我了解 —— 仍然更改",
     range_warn_cancel: "保留当前范围",
     start_title: "启动方式",
+    scooter_ctl_title: "滑板车控制",
     start_label: "滑板车从静止起步的方式（dp 16）",
     start_direct: "直接启动（拧油门）",
     start_run: "助跑/推行后启动",
     start_sent: "启动方式已发送",
     start_applied: v => `启动方式已确认：${v}`,
     start_rejected: v => `启动方式未生效（仍为 ${v}）`,
+    panel_unit_title: "面板单位",
+    panel_unit_label: "滑板车自带显示屏的速度单位（dp 11）",
+    panel_unit_kmh: "km/h",
+    panel_unit_mph: "mph",
+    panel_unit_sent: "面板单位已发送",
+    panel_unit_applied: v => `面板单位已确认：${v}`,
+    panel_unit_rejected: v => `面板单位未生效（仍为 ${v}）`,
     offline_title: "自动关机时间",
     offline_label: "静止多久后滑板车自动关机（dp 104，分钟，5\u201390）",
     offline_save: "发送自动关机时间",
@@ -428,12 +449,18 @@ function applyStatic() {
   $("speedSaveBtn").textContent = t.speed_save;
   document.querySelectorAll(".speed-min-lbl").forEach(e => { e.textContent = t.range_min; });
   document.querySelectorAll(".speed-max-lbl").forEach(e => { e.textContent = t.range_max; });
-  $("startTitle").textContent = t.start_title;
+  $("scooterCtlTitle").textContent = t.scooter_ctl_title;
   $("startLabel").textContent = t.start_label;
   const startSel = $("startSelect");
   if (startSel && startSel.options.length >= 2) {
     startSel.options[0].textContent = t.start_direct;
     startSel.options[1].textContent = t.start_run;
+  }
+  $("panelUnitLabel").textContent = t.panel_unit_label;
+  const panelSel = $("panelUnitSelect");
+  if (panelSel && panelSel.options.length >= 2) {
+    panelSel.options[0].textContent = t.panel_unit_kmh;
+    panelSel.options[1].textContent = t.panel_unit_mph;
   }
   $("offlineTitle").textContent = t.offline_title;
   $("offlineLabel").textContent = t.offline_label;
@@ -1141,6 +1168,7 @@ function refillFromLastDp() {
     updateLock(id, v, undefined);
     updateHeadlight(id, v, undefined);
     updateStartMode(id, v, undefined);
+    updatePanelUnit(id, v, undefined);
     updateOffline(id, v);
   }
 }
@@ -1153,6 +1181,8 @@ function showDeviceState(dev) {
   currentGear = null;
   currentLock = null;
   currentLight = null;
+  currentStartMode = null;
+  currentPanelUnit = null;
   buildControls(deviceSpec);
   buildRideCards();
   buildModeButtons();
@@ -1234,6 +1264,7 @@ const KNOWN_DPS = {
   1: "dp_lock",
   3: "dp_battery",
   8: "dp_headlight",
+  11: "dp_panel_unit",
   12: "dp_odometer",
   15: "dp_gear",
   16: "dp_start_mode",
@@ -1362,14 +1393,14 @@ function askPrompt(title, body, okLabel, cancelLabel) {
   });
 }
 
-// The ONLY function that writes to the scooter. It requires the arm-switch to
-// be on (tuya.allowWrites), shows a confirmation, and reverts the control if
-// the user declines.
-function requestSend(dpId, dt, rawValue, displayText, revert, onSent) {
+// The ONLY function that writes datapoints to the scooter. It requires the
+// arm-switch to be on (tuya.allowWrites). `confirm` adds one confirmation first,
+// used only by the raw Debug controls; the normal Ride / Settings controls send
+// directly. Declining reverts the control.
+function requestSend(dpId, dt, rawValue, displayText, revert, onSent, confirm) {
   if (!tuya) { toast(t.status_disconnected); return; }
   if (!armed) { toast(t.arm_needed); return; }
-  askConfirm("dp " + dpId, displayText).then(ok => {
-    if (!ok) { if (revert) revert(); return; }
+  const doSend = () => {
     log("→ dp " + dpId + " (" + (DT_NAMES[dt] || dt) + ") = " + (rawValue instanceof Uint8Array ? hex(rawValue) : rawValue));
     try {
       tuya.sendDp(dpId, dt, rawValue);
@@ -1382,6 +1413,11 @@ function requestSend(dpId, dt, rawValue, displayText, revert, onSent) {
       log("send failed: " + (e && e.message ? e.message : e));
       toast("send failed: " + (e && e.message ? e.message : e));
     }
+  };
+  if (!confirm) { doSend(); return; }
+  askConfirm("dp " + dpId, displayText).then(ok => {
+    if (!ok) { if (revert) revert(); return; }
+    doSend();
   });
 }
 
@@ -1423,7 +1459,7 @@ function makeControl(dpDef) {
     input.addEventListener("change", () => {
       const want = input.checked ? 1 : 0;
       requestSend(dpId, DT.BOOL, want, input.checked ? t.on : t.off,
-        () => { input.checked = !input.checked; });
+        () => { input.checked = !input.checked; }, null, true);
     });
     apply = v => { input.checked = !!v; };
     tile.appendChild(wrap);
@@ -1440,7 +1476,7 @@ function makeControl(dpDef) {
     });
     sel.addEventListener("change", () => {
       const v = Number(sel.value);
-      requestSend(dpId, DT.ENUM, v, formatDpValue(dpDef, v), null);
+      requestSend(dpId, DT.ENUM, v, formatDpValue(dpDef, v), null, null, true);
     });
     apply = v => { sel.value = String(v); };
     tile.appendChild(sel);
@@ -1459,7 +1495,7 @@ function makeControl(dpDef) {
     btn.textContent = t.send;
     btn.onclick = () => {
       const raw = displayToRaw(Number(num.value), scale);
-      requestSend(dpId, dt, raw, formatDpValue(dpDef, raw), null);
+      requestSend(dpId, dt, raw, formatDpValue(dpDef, raw), null, null, true);
     };
     apply = v => { if (document.activeElement !== num) num.value = String(rawToDisplay(v, scale)); };
     const row = document.createElement("div");
@@ -1478,7 +1514,7 @@ function makeControl(dpDef) {
     btn.textContent = t.send;
     btn.onclick = () => {
       const bytes = new TextEncoder().encode(inp.value);
-      requestSend(dpId, dt, bytes, inp.value, null);
+      requestSend(dpId, dt, bytes, inp.value, null, null, true);
     };
     apply = v => { if (document.activeElement !== inp) inp.value = v instanceof Uint8Array ? hex(v) : String(v); };
     const row = document.createElement("div");
@@ -1587,7 +1623,7 @@ function buildManual() {
     if (dt === DT.BOOL) raw = /^(1|true|on|yes)$/i.test(valIn.value.trim()) ? 1 : 0;
     else if (dt === DT.VALUE || dt === DT.ENUM || dt === DT.BITMAP) raw = parseInt(valIn.value, 10) || 0;
     else raw = new TextEncoder().encode(valIn.value);
-    requestSend(id, dt, raw, valIn.value, null);
+    requestSend(id, dt, raw, valIn.value, null, null, true);
   };
 
   const queryBtn = document.createElement("button");
@@ -1688,6 +1724,7 @@ function onDp(dp) {
   updateLock(dp.id, dp.value, dp.type);
   updateHeadlight(dp.id, dp.value, dp.type);
   updateStartMode(dp.id, dp.value, dp.type);
+  updatePanelUnit(dp.id, dp.value, dp.type);
   updateOffline(dp.id, dp.value);
 }
 
@@ -1784,6 +1821,7 @@ const Geo = {
     this.startedAt = Date.now(); this.running = true;
     $("gpsBtn").textContent = t.gps_stop;
     $("rideGpsState").textContent = t.gps_waiting;
+    $("rideGpsCoords").textContent = "";
     this.timer = setInterval(() => this.render(), 1000);
     this.watchId = navigator.geolocation.watchPosition(
       (p) => this.onPos(p),
@@ -1798,6 +1836,7 @@ const Geo = {
     clearInterval(this.timer); this.timer = null;
     $("gpsBtn").textContent = t.gps_start;
     $("rideGpsState").textContent = t.gps_off;
+    $("rideGpsCoords").textContent = "";
     this.render();
   },
   onPos(pos) {
@@ -1822,6 +1861,7 @@ const Geo = {
     if (this.speedKmh > 0) { this.sumKmh += this.speedKmh; this.samples++; }
     this.lastPos = { lat: c.latitude, lon: c.longitude, t: tms };
     $("rideGpsState").textContent = t.gps_tracking + (c.accuracy ? "  ±" + Math.round(c.accuracy) + " m" : "");
+    $("rideGpsCoords").textContent = "\ud83d\udccd " + c.latitude.toFixed(6) + ", " + c.longitude.toFixed(6);
     this.render();
   },
   render() {
@@ -1874,8 +1914,8 @@ function updateRideCard(id, v) {
 }
 
 // Ride mode (Walk / Eco / D / S). DP 15 is the gear-selector candidate; its
-// value may be a number or a Tuya ENUM string. The selector writes dp 15
-// (through the usual arm + confirmation gate).
+// value may be a number or a Tuya ENUM string. The selector writes dp 15 and
+// sends directly (no confirmation gate — switching gear is routine).
 const GEAR_DP = 15;
 let gearType = null; // the DP type the scooter actually reports for dp 15
 const MODE_BTNS = [
@@ -2068,8 +2108,8 @@ $("lightBtn").addEventListener("click", onLightClick);
 
 // ---- start mode (dp 16) ----
 // ENUM: 0 = start directly (throttle from standstill), 1 = run/push to start.
-// A configuration-style control, so it lives in Settings; reads/writes go
-// through the same confirmation + read-back verification as the other controls.
+// A scooter setting shown on the Ride dashboard (Scooter controls); sends
+// directly and verifies with a read-back like the other controls.
 const START_MODE_DP = 16;
 let startModeType = null;
 let currentStartMode = null;
@@ -2116,9 +2156,56 @@ function updateStartMode(id, v, type) {
   }
 }
 
+// ---- panel units (dp 11) ----
+// BOOL: false (0) = km/h, true (1) = mph on the scooter's own display. This is
+// the scooter panel's own unit, independent of the app's speed unit.
+const PANEL_UNIT_DP = 11;
+let currentPanelUnit = null;
+let panelUnitExpect = null;
+
+function panelUnitLabel(v) {
+  return Number(v) === 1 ? t.panel_unit_mph : t.panel_unit_kmh;
+}
+
+function renderPanelUnit() {
+  const sel = $("panelUnitSelect");
+  if (!sel) return;
+  if (currentPanelUnit === null) { sel.value = ""; return; }
+  sel.value = String(currentPanelUnit);
+}
+
+function onPanelUnitChange() {
+  if (!tuya) { toast(t.status_disconnected); renderPanelUnit(); return; }
+  if (!armed) { toast(t.arm_needed); renderPanelUnit(); return; }
+  const sel = $("panelUnitSelect");
+  const want = Number(sel.value);
+  requestSend(PANEL_UNIT_DP, DT.BOOL, want, panelUnitLabel(want), () => renderPanelUnit(),
+    () => { panelUnitExpect = { value: want, at: Date.now() }; });
+  $("panelUnitStatus").textContent = t.panel_unit_sent;
+  setTimeout(() => { $("panelUnitStatus").textContent = ""; }, 2500);
+}
+$("panelUnitSelect").addEventListener("change", onPanelUnitChange);
+
+function updatePanelUnit(id, v, type) {
+  if (id !== PANEL_UNIT_DP) return;
+  if (v == null) return;
+  currentPanelUnit = (typeof v === "boolean") ? (v ? 1 : 0) : (Number(v) ? 1 : 0);
+  renderPanelUnit();
+  if (panelUnitExpect && Date.now() - panelUnitExpect.at < 8000) {
+    const want = panelUnitExpect.value;
+    panelUnitExpect = null;
+    const ok = currentPanelUnit === want;
+    log(ok
+      ? "panel unit read-back: dp 11 = " + currentPanelUnit + " — scooter applied it"
+      : "panel unit read-back: dp 11 = " + currentPanelUnit + " (asked for " + want + ") — scooter did NOT apply it");
+    toast(ok ? t.panel_unit_applied(panelUnitLabel(currentPanelUnit))
+      : t.panel_unit_rejected(panelUnitLabel(currentPanelUnit)));
+  }
+}
+
 // ---- auto-off time (dp 104) ----
 // Idle minutes before the scooter powers its radios off (range 5-90, default 60).
-// Config-style, so it lives in Settings and writes through the confirm gate.
+// Config-style, so it lives in Settings and sends directly (no confirm gate).
 const OFFLINE_DP = 104;
 let currentOffline = null;
 
@@ -2268,6 +2355,7 @@ ttsToggle.addEventListener("change", () => {
 // 8c. View switching
 // -------------------------
 function showView(name) {
+  if (name === "debug" && !devMode) name = "ride";
   const ride = name === "ride";
   $("view-ride").hidden = !ride;
   $("view-debug").hidden = ride;
@@ -2276,6 +2364,38 @@ function showView(name) {
 }
 $("tabRide").onclick = () => showView("ride");
 $("tabDebug").onclick = () => showView("debug");
+
+// -------------------------
+// 8c-2. Debug mode (hidden by default)
+// -------------------------
+// The Debug tab is only revealed after tapping the version five times; another
+// five taps hide it again. The flag is persisted in localStorage, so it
+// survives reloads — just like a dev mode. While it is off the whole tab bar
+// is hidden, leaving just the Ride view.
+const LS_DEV = "escooter.dev";
+let devMode = localStorage.getItem(LS_DEV) === "1";
+const DEV_TAPS = 5;
+let devTaps = 0, devTapTimer = null;
+
+function applyDevMode() {
+  const tabbar = document.querySelector(".tabbar");
+  if (tabbar) tabbar.hidden = !devMode;
+  if (!devMode) showView("ride");
+  log("debug mode: " + (devMode ? "on" : "off"));
+}
+
+$("version").addEventListener("click", () => {
+  devTaps++;
+  clearTimeout(devTapTimer);
+  devTapTimer = setTimeout(() => { devTaps = 0; }, 1500);
+  if (devTaps >= DEV_TAPS) {
+    devTaps = 0;
+    devMode = !devMode;
+    localStorage.setItem(LS_DEV, devMode ? "1" : "0");
+    applyDevMode();
+    toast(devMode ? t.dev_on : t.dev_off);
+  }
+});
 
 // -------------------------
 // 8d. Language switching
@@ -2524,6 +2644,7 @@ $("copyLogBtn").onclick = async () => {
   const ok = await Crypto.load();
   restoreDevices(); // builds the controls and, when offline, restores the last-seen state
   setUnit(unit);
+  applyDevMode();
   populateVoices();
   if (!ok) log("(connect is disabled until the crypto module loads)");
   log("secure context: " + window.isSecureContext);
