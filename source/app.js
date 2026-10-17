@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.6.1";
+const APP_VERSION = "0.7.1";
 
 // -------------------------
 // 1. Localization dictionary
@@ -88,7 +88,26 @@ const i18n = {
     mode_d: "D",
     mode_s: "S",
     mode_unknown: v => `Mode ${v}`,
+    arm_needed: "Turn on \u201cEnable sending commands\u201d in Debug to change the mode.",
+    credential_title: "Credential",
+    lang_title: "Language",
+    lang_label: "Interface language",
+    voice_label: "Speech voice",
+    voice_default: "Default voice",
+    device_title: "Scooter",
+    device_name_label: "Scooter name",
+    device_pick_label: "Imported scooter",
     import_label: "Load JSON config",
+    cred_hint: "Preferred: import your scooter's JSON from the Tuya IoT platform —",
+    cred_help: "How to get your scooter's JSON",
+    cred_manual: "Or enter the credentials manually:",
+    cred_steps: [
+      "Open iot.tuya.com and sign in with the same Tuya / Smart Life account that owns the scooter.",
+      "Go to Cloud \u2192 Development and open your project (create a free one if you don't have any).",
+      "In the project, link the scooter under Devices \u2192 Link Device \u2192 choose it from the app account.",
+      "Open the scooter \u2192 Device Details (or API Explorer \u2192 Device Details) and copy the JSON response — it contains device_id, uuid and local_key.",
+      "Save that JSON to a file and load it above. If the file also has the product's function/status spec, the controls are built automatically.",
+    ],
     import_ok: name => `Loaded ${name}`,
     import_none: "No device found in that file.",
     import_err: msg => `Import failed: ${msg}`,
@@ -171,17 +190,41 @@ const i18n = {
     mode_walk: "步行",
     mode_eco: "节能",
     mode_d: "行驶",
-    mode_s: "运行",
+    mode_s: "运动",
     mode_unknown: v => `模式 ${v}`,
+    arm_needed: "请先在调试页开启“启用发送命令”后再切换模式。",
+    credential_title: "凭据",
+    lang_title: "语言",
+    lang_label: "界面语言",
+    voice_label: "语音",
+    voice_default: "默认语音",
+    device_title: "滑板车",
+    device_name_label: "滑板车名称",
+    device_pick_label: "已导入的滑板车",
     import_label: "加载 JSON 配置",
+    cred_hint: "推荐：从涂鸦 IoT 平台导入滑板车的 JSON ——",
+    cred_help: "如何获取滑板车 JSON",
+    cred_manual: "或手动填写凭据：",
+    cred_steps: [
+      "打开 iot.tuya.com，用拥有该滑板车的涂鸦 / 智能生活账号登录。",
+      "进入 云开发 \u2192 Development，打开你的项目（没有就免费新建一个）。",
+      "在项目里关联滑板车：Devices \u2192 Link Device \u2192 从 App 账号中选择它。",
+      "打开滑板车 \u2192 Device Details（或 API Explorer \u2192 Device Details），复制返回的 JSON —— 其中包含 device_id、uuid 与 local_key。",
+      "把该 JSON 保存成文件后在此加载。若文件还包含产品的 function/status 定义，则控件会自动生成。",
+    ],
     import_ok: name => `已加载 ${name}`,
     import_none: "文件中未找到设备。",
     import_err: msg => `导入失败：${msg}`,
   }
 };
 
-const lang = navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
-const t = i18n[lang];
+const LS_LANG = "escooter.lang";
+function detectLang() {
+  return (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+let lang = localStorage.getItem(LS_LANG) || detectLang();
+if (!i18n[lang]) lang = detectLang();
+let t = i18n[lang];
 
 // -------------------------
 // 2. Element handles
@@ -203,38 +246,59 @@ const confirmBody = $("confirmBody");
 // -------------------------
 // 3. Localization of static UI
 // -------------------------
-$("title").textContent = t.title;
-$("connectBtn").textContent = t.connect;
+function applyStatic() {
+  document.documentElement.lang = lang;
+  $("title").textContent = t.title;
+  $("connectBtn").textContent = t.connect;
+  $("settingsTitle").textContent = t.settings;
+  $("settingsHint").textContent = t.settings_hint;
+  $("langTitle").textContent = t.lang_title;
+  $("langLabel").textContent = t.lang_label;
+  $("voiceLabel").textContent = t.voice_label;
+  $("deviceTitle").textContent = t.device_title;
+  $("deviceNameLabel").textContent = t.device_name_label;
+  $("devicePickLabel").textContent = t.device_pick_label;
+  $("credTitle").textContent = t.credential_title;
+  $("credHintText").textContent = t.cred_hint;
+  $("credHelpSummary").textContent = t.cred_help;
+  $("credManualNote").textContent = t.cred_manual;
+  const credSteps = $("credSteps");
+  credSteps.textContent = "";
+  for (const s of t.cred_steps) {
+    const li = document.createElement("li");
+    li.textContent = s;
+    credSteps.appendChild(li);
+  }
+  $("keyLabel").textContent = t.key_label;
+  $("devIdLabel").textContent = t.devid_label;
+  $("uuidLabel").textContent = t.uuid_label;
+  $("importLabel").textContent = t.import_label;
+  $("saveKeysBtn").textContent = t.save;
+  $("diagSummary").textContent = t.diagnostics;
+  $("clearLogBtn").textContent = t.clear_log;
+  $("copyLogBtn").textContent = t.copy_log;
+  $("safetyNote").textContent = t.write_notice;
+  $("safetyNote").classList.add("warn");
+  $("confirmTitle").textContent = t.confirm_title;
+  $("confirmCancelBtn").textContent = t.confirm_cancel;
+  $("confirmSendBtn").textContent = t.confirm_send;
+  $("version").textContent = "v" + APP_VERSION;
+  $("tabRide").textContent = t.tab_ride;
+  $("tabDebug").textContent = t.tab_debug;
+  $("rideScooterTitle").textContent = t.ride_scooter;
+  $("lblTrip").textContent = t.trip;
+  $("lblMax").textContent = t.max;
+  $("lblAvg").textContent = t.avg;
+  $("lblTime").textContent = t.time;
+  $("announceTitle").textContent = t.announce_title;
+  $("lblEvery").textContent = t.every_s;
+  $("lblTimes").textContent = t.times;
+  $("langSelect").value = lang;
+}
+applyStatic();
 statusTextEl.textContent = t.status_idle;
-$("settingsTitle").textContent = t.settings;
-$("settingsHint").textContent = t.settings_hint;
-$("keyLabel").textContent = t.key_label;
-$("devIdLabel").textContent = t.devid_label;
-$("uuidLabel").textContent = t.uuid_label;
-$("importLabel").textContent = t.import_label;
-$("saveKeysBtn").textContent = t.save;
-$("diagSummary").textContent = t.diagnostics;
-$("clearLogBtn").textContent = t.clear_log;
-$("copyLogBtn").textContent = t.copy_log;
-$("safetyNote").textContent = t.write_notice;
-$("safetyNote").classList.add("warn");
-$("confirmTitle").textContent = t.confirm_title;
-$("confirmCancelBtn").textContent = t.confirm_cancel;
-$("confirmSendBtn").textContent = t.confirm_send;
-document.documentElement.lang = lang;
-$("version").textContent = "v" + APP_VERSION;
-$("tabRide").textContent = t.tab_ride;
-$("tabDebug").textContent = t.tab_debug;
-$("rideScooterTitle").textContent = t.ride_scooter;
 $("rideGpsState").textContent = t.gps_off;
 $("gpsBtn").textContent = t.gps_start;
-$("lblTrip").textContent = t.trip;
-$("lblMax").textContent = t.max;
-$("lblAvg").textContent = t.avg;
-$("lblTime").textContent = t.time;
-$("announceTitle").textContent = t.announce_title;
-$("lblEvery").textContent = t.every_s;
-$("lblTimes").textContent = t.times;
 $("ttsState").textContent = t.tts_off;
 
 // -------------------------
@@ -385,38 +449,53 @@ $("saveKeysBtn").onclick = () => {
 };
 
 // -------------------------
-// 7b. Import a Tuya / keys.json config from the UI
+// 7b. Devices + importing a Tuya / keys.json config from the UI
 // -------------------------
-let gearOverride = null; // optional { valueKey: { icon, label } } from an import
+const LS_NAME = "escooter.device_name";
+const LS_DEVICES = "escooter.devices";
 const importStatusEl = $("importStatus");
+let importedDevices = [];
 
-function pickImportedDevice(data) {
-  if (data && data.devices && typeof data.devices === "object") {
-    const arr = Object.values(data.devices);
-    if (arr.length) return arr[0];
-  }
-  if (data && data.result && typeof data.result === "object") {
-    const r = data.result;
-    if (r.devices && typeof r.devices === "object") {
-      const arr = Object.values(r.devices);
-      if (arr.length) return arr[0];
-    }
-    return r;
-  }
-  return data || {};
+function deviceLabel(d, i) {
+  return d.device_name || d.name || d.model || d.device_id || d.deviceId || d.id || ("device " + (i + 1));
 }
 
-function importConfig(data) {
-  const dev = pickImportedDevice(data);
-  const functions = dev.functions || data.functions || null;
-  const status = dev.status || data.status || null;
+function setDeviceName(name) {
+  name = (name || "").trim();
+  localStorage.setItem(LS_NAME, name);
+  $("deviceName").textContent = name;
+  $("deviceNameInput").value = name;
+}
+
+function collectDevices(data) {
+  let arr = [];
+  if (data && data.devices && typeof data.devices === "object") arr = Object.values(data.devices);
+  else if (data && data.result && data.result.devices && typeof data.result.devices === "object") arr = Object.values(data.result.devices);
+  else if (data && data.result && typeof data.result === "object") arr = [data.result];
+  else if (data && typeof data === "object") arr = [data];
+  return arr.filter(d => d && typeof d === "object" &&
+    (d.local_key || d.localKey || d.device_id || d.deviceId || d.id || d.functions || d.status));
+}
+
+function populateDeviceSelect() {
+  const sel = $("deviceSelect");
+  const field = $("devicePickField");
+  sel.textContent = "";
+  if (importedDevices.length <= 1) { field.hidden = true; return; }
+  field.hidden = false;
+  importedDevices.forEach((d, i) => {
+    const o = document.createElement("option");
+    o.value = String(i);
+    o.textContent = deviceLabel(d, i);
+    sel.appendChild(o);
+  });
+}
+
+// Apply one device: credentials, datapoint spec and display name.
+function applyDevice(dev) {
   const localKey = dev.local_key || dev.localKey || "";
   const deviceId = dev.device_id || dev.deviceId || dev.id || "";
   const uuid = dev.uuid || "";
-  const name = dev.device_name || dev.name || dev.model || deviceId || "device";
-
-  if (!(localKey || deviceId || uuid || functions || status)) throw new Error("unrecognised file");
-
   if (localKey || deviceId || uuid) {
     keyInput.value = localKey || keyInput.value;
     devIdInput.value = deviceId || devIdInput.value;
@@ -425,17 +504,32 @@ function importConfig(data) {
     localStorage.setItem(LS_DEVID, devIdInput.value);
     localStorage.setItem(LS_UUID, uuidInput.value);
   }
+  const functions = dev.functions || null;
+  const status = dev.status || null;
   if (functions || status) {
-    deviceSpec = { functions: functions || [], status: status || [], name };
+    deviceSpec = { functions: functions || [], status: status || [], name: deviceLabel(dev, 0) };
     buildControls(deviceSpec);
   }
-  const gm = data.gear_modes || dev.gear_modes;
-  if (gm && typeof gm === "object") gearOverride = gm;
+  setDeviceName(deviceLabel(dev, 0));
+}
 
-  importStatusEl.textContent = t.import_ok(name);
+function importConfig(data) {
+  const list = collectDevices(data);
+  if (!list.length) throw new Error("unrecognised file");
+  importedDevices = list;
+  localStorage.setItem(LS_DEVICES, JSON.stringify(list));
+  populateDeviceSelect();
+
+  const savedId = localStorage.getItem(LS_DEVID) || "";
+  let idx = list.findIndex(d => (d.device_id || d.deviceId || d.id) === savedId);
+  if (idx < 0) idx = 0;
+  $("deviceSelect").value = String(idx);
+  applyDevice(list[idx]);
+
+  importStatusEl.textContent = t.import_ok($("deviceName").textContent);
   importStatusEl.classList.remove("error");
   setTimeout(() => { importStatusEl.textContent = ""; }, 3000);
-  log("imported config: " + name + ((functions || status) ? " (spec + creds)" : " (credentials)"));
+  log("imported " + list.length + " scooter(s); using " + $("deviceName").textContent);
 }
 
 $("importInput").addEventListener("change", async (e) => {
@@ -449,6 +543,43 @@ $("importInput").addEventListener("change", async (e) => {
   }
   e.target.value = "";
 });
+
+$("deviceSelect").addEventListener("change", () => {
+  const dev = importedDevices[Number($("deviceSelect").value)];
+  if (dev) applyDevice(dev);
+});
+
+$("deviceNameInput").addEventListener("change", () => {
+  setDeviceName($("deviceNameInput").value);
+  const idx = Number($("deviceSelect").value);
+  const dev = importedDevices[idx];
+  if (dev) {
+    dev.device_name = $("deviceNameInput").value.trim();
+    localStorage.setItem(LS_DEVICES, JSON.stringify(importedDevices));
+    if (importedDevices.length > 1) populateDeviceSelect();
+  }
+});
+
+// Restore the last used scooter (name, credentials, spec) from this browser.
+function restoreDevices() {
+  const name = localStorage.getItem(LS_NAME) || "";
+  $("deviceName").textContent = name;
+  $("deviceNameInput").value = name;
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_DEVICES) || "[]");
+    if (!Array.isArray(saved) || !saved.length) return;
+    importedDevices = saved;
+    populateDeviceSelect();
+    const savedId = localStorage.getItem(LS_DEVID) || "";
+    let idx = saved.findIndex(d => (d.device_id || d.deviceId || d.id) === savedId);
+    if (idx < 0) idx = 0;
+    if (importedDevices.length > 1) $("deviceSelect").value = String(idx);
+    const dev = importedDevices[idx];
+    if (dev && (dev.functions || dev.status)) {
+      deviceSpec = { functions: dev.functions || [], status: dev.status || [], name: deviceLabel(dev, idx) };
+    }
+  } catch (_) {}
+}
 
 // -------------------------
 // 8. Datapoint spec -> UI
@@ -671,7 +802,9 @@ function makeControl(dpDef) {
 }
 
 // ---- global control state ----
-let armed = false;               // whether the user has enabled sending
+// Sending is armed by default; the user can turn it off and that choice is
+// remembered. Each send still shows a confirmation.
+let armed = localStorage.getItem("escooter.armed") !== "0";
 const lastDp = new Map();        // dp_id -> last reported value
 const observed = new Set();      // dp_ids seen on the wire
 let specIds = new Set();         // dp_ids described by the loaded spec
@@ -700,6 +833,7 @@ function armSwitchEl() {
   wrap.appendChild(knob);
   input.addEventListener("change", () => {
     armed = input.checked;
+    localStorage.setItem("escooter.armed", armed ? "1" : "0");
     if (tuya) tuya.allowWrites = armed;
     log("commands " + (armed ? "ENABLED" : "disabled"));
     buildControls(deviceSpec);
@@ -969,35 +1103,50 @@ function updateRideCard(id, v) {
 }
 
 // Ride mode (Walk / Eco / D / S). DP 15 is the gear-selector candidate; its
-// value may be a number or a Tuya ENUM string. If the labels don't match your
-// scooter, override them with a "gear_modes" object in an imported config.
+// value may be a number or a Tuya ENUM string. The selector writes dp 15
+// (through the usual arm + confirmation gate).
 const GEAR_DP = 15;
-const GEAR_MODES = {
-  walk: { icon: "🚶", label: () => t.mode_walk },
-  eco: { icon: "🍃", label: () => t.mode_eco },
-  d: { icon: "🛴", label: () => t.mode_d },
-  s: { icon: "⚡", label: () => t.mode_s },
-};
+const MODE_BTNS = [
+  { key: "walk", id: "modeWalk", value: 0 },
+  { key: "eco", id: "modeEco", value: 1 },
+  { key: "d", id: "modeD", value: 2 },
+  { key: "s", id: "modeS", value: 3 },
+];
+const MODE_ICONS = { walk: "🚶", eco: "🍃", d: "🛴", s: "⚡" };
+const MODE_LABELS = { walk: () => t.mode_walk, eco: () => t.mode_eco, d: () => t.mode_d, s: () => t.mode_s };
 const GEAR_ALIASES = {
   "0": "walk", walk: "walk", pedestrian: "walk",
   "1": "eco", eco: "eco", economy: "eco",
   "2": "d", d: "d", drive: "d", normal: "d",
   "3": "s", s: "s", sport: "s", turbo: "s",
 };
-function updateGear(id, v) {
-  if (id !== GEAR_DP) return;
-  const el = $("rideMode");
-  if (v == null) { el.hidden = true; return; }
-  const vk = String(v).toLowerCase();
-  const ov = gearOverride && (gearOverride[vk] || gearOverride[String(Number(v))]);
-  if (ov) {
-    el.hidden = false;
-    el.textContent = (ov.icon ? ov.icon + " " : "") + (ov.label || ov.name || vk);
-    return;
+let currentGear = null;
+
+function buildModeButtons() {
+  for (const b of MODE_BTNS) {
+    const btn = $(b.id);
+    btn.textContent = "";
+    const ic = document.createElement("span");
+    ic.className = "mode-emoji";
+    ic.textContent = MODE_ICONS[b.key];
+    const tx = document.createElement("span");
+    tx.textContent = MODE_LABELS[b.key]();
+    btn.appendChild(ic);
+    btn.appendChild(tx);
+    btn.classList.toggle("is-active", b.key === currentGear);
+    btn.onclick = () => onModeClick(b);
   }
-  const mode = GEAR_MODES[GEAR_ALIASES[vk] || GEAR_ALIASES[String(Number(v))]];
-  el.hidden = false;
-  el.textContent = mode ? mode.icon + " " + mode.label() : t.mode_unknown(v);
+}
+function onModeClick(b) {
+  if (!tuya) { log(t.status_disconnected); return; }
+  if (!armed) { log(t.arm_needed); return; }
+  requestSend(GEAR_DP, DT.ENUM, b.value, MODE_ICONS[b.key] + " " + MODE_LABELS[b.key](), null);
+}
+function updateGear(id, v) {
+  if (id !== GEAR_DP || v == null) return;
+  const vk = String(v).toLowerCase();
+  currentGear = GEAR_ALIASES[vk] || GEAR_ALIASES[String(Number(v))] || null;
+  for (const b of MODE_BTNS) $(b.id).classList.toggle("is-active", b.key === currentGear);
 }
 
 // ---- voice speed announcements (Web Speech API) ----
@@ -1016,6 +1165,43 @@ function saveTts() {
 }
 ttsEvery.addEventListener("change", saveTts);
 ttsMax.addEventListener("change", saveTts);
+
+// ---- speech-voice selection ----
+const LS_VOICE = "escooter.voice";
+const voiceSelect = $("voiceSelect");
+function populateVoices() {
+  if (!("speechSynthesis" in window) || !voiceSelect) return;
+  const voices = window.speechSynthesis.getVoices() || [];
+  const saved = localStorage.getItem(LS_VOICE) || "";
+  voiceSelect.textContent = "";
+  const def = document.createElement("option");
+  def.value = "";
+  def.textContent = t.voice_default;
+  voiceSelect.appendChild(def);
+  const sorted = [...voices].sort((a, b) => {
+    const pa = (a.lang || "").toLowerCase().startsWith(lang) ? 0 : 1;
+    const pb = (b.lang || "").toLowerCase().startsWith(lang) ? 0 : 1;
+    return pa - pb || (a.name || "").localeCompare(b.name || "");
+  });
+  for (const v of sorted) {
+    const o = document.createElement("option");
+    o.value = v.voiceURI || v.name;
+    o.textContent = v.name + " (" + v.lang + ")";
+    voiceSelect.appendChild(o);
+  }
+  const has = [...voiceSelect.children].some(c => c.value === saved);
+  voiceSelect.value = saved && has ? saved : "";
+}
+function selectedVoice() {
+  if (!("speechSynthesis" in window) || !voiceSelect || !voiceSelect.value) return null;
+  const uri = voiceSelect.value;
+  return (window.speechSynthesis.getVoices() || []).find(v => (v.voiceURI || v.name) === uri) || null;
+}
+voiceSelect.addEventListener("change", () => localStorage.setItem(LS_VOICE, voiceSelect.value));
+if ("speechSynthesis" in window) {
+  populateVoices();
+  window.speechSynthesis.onvoiceschanged = populateVoices;
+}
 
 const Announce = {
   on: false, count: 0, timer: null,
@@ -1041,7 +1227,10 @@ const Announce = {
     log("tts " + this.count + ": " + text);
     try {
       window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+      const u = new SpeechSynthesisUtterance(text);
+      const voice = selectedVoice();
+      if (voice) { u.voice = voice; u.lang = voice.lang; }
+      window.speechSynthesis.speak(u);
     } catch (e) { log("tts error: " + e.message); }
   },
   stop(flipToggle) {
@@ -1074,6 +1263,32 @@ function showView(name) {
 }
 $("tabRide").onclick = () => showView("ride");
 $("tabDebug").onclick = () => showView("debug");
+
+// -------------------------
+// 8d. Language switching
+// -------------------------
+function setLang(l) {
+  if (!i18n[l] || l === lang) return;
+  lang = l;
+  t = i18n[l];
+  localStorage.setItem(LS_LANG, l);
+  applyStatic();
+  buildControls(deviceSpec);
+  buildRideCards();
+  buildModeButtons();
+  updateTtsState();
+  if (Geo.running) {
+    $("gpsBtn").textContent = t.gps_stop;
+  } else {
+    $("gpsBtn").textContent = t.gps_start;
+    $("rideGpsState").textContent = t.gps_off;
+  }
+  Geo.render();
+  setConnected(!!tuya);
+  populateVoices();
+  log("language: " + l);
+}
+$("langSelect").addEventListener("change", () => setLang($("langSelect").value));
 
 // -------------------------
 // 9. BLE session
@@ -1204,9 +1419,12 @@ $("copyLogBtn").onclick = async () => {
 (async function boot() {
   log("app v" + APP_VERSION);
   const ok = await Crypto.load();
+  restoreDevices();
   buildControls(deviceSpec);
   buildRideCards();
+  buildModeButtons();
   setUnit(unit);
+  populateVoices();
   if (!ok) log("(connect is disabled until the crypto module loads)");
   log("secure context: " + window.isSecureContext);
   if (!("bluetooth" in navigator)) {

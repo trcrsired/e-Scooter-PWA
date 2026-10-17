@@ -24,6 +24,7 @@
 <body>
   <header class="appbar">
     <h1 id="title">e-Scooter</h1>
+    <span id="deviceName" class="device-name"></span>
     <span id="version" class="version"></span>
     <button id="settingsBtn" class="icon-btn" aria-label="Settings">⚙</button>
   </header>
@@ -45,7 +46,12 @@
       </div>
 
       <div class="speed-hero">
-        <div class="mode-badge" id="rideMode" hidden></div>
+        <div class="mode-seg" id="modeSeg" role="group" aria-label="Ride mode">
+          <button id="modeWalk" class="mode-btn" data-mode="walk"></button>
+          <button id="modeEco" class="mode-btn" data-mode="eco"></button>
+          <button id="modeD" class="mode-btn" data-mode="d"></button>
+          <button id="modeS" class="mode-btn" data-mode="s"></button>
+        </div>
         <div class="speed-value"><span id="rideSpeed">0</span><span class="speed-unit" id="rideSpeedUnit">km/h</span></div>
         <div class="speed-state" id="rideGpsState"></div>
       </div>
@@ -115,6 +121,45 @@
       </div>
       <p id="settingsHint" class="sheet-hint"></p>
 
+      <h3 id="langTitle" class="sheet-section-title"></h3>
+      <div class="field">
+        <label id="langLabel" for="langSelect"></label>
+        <select id="langSelect">
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
+      </div>
+      <div class="field">
+        <label id="voiceLabel" for="voiceSelect"></label>
+        <select id="voiceSelect"></select>
+      </div>
+
+      <h3 id="deviceTitle" class="sheet-section-title"></h3>
+      <div class="field">
+        <label id="deviceNameLabel" for="deviceNameInput"></label>
+        <input id="deviceNameInput" type="text" autocomplete="off" spellcheck="false" placeholder="device name">
+      </div>
+      <div class="field" id="devicePickField" hidden>
+        <label id="devicePickLabel" for="deviceSelect"></label>
+        <select id="deviceSelect"></select>
+      </div>
+
+      <h3 id="credTitle" class="sheet-section-title"></h3>
+      <p class="sheet-hint small">
+        <span id="credHintText"></span>
+        <a href="https://iot.tuya.com/" target="_blank" rel="noopener">iot.tuya.com</a>
+      </p>
+      <div class="field">
+        <label id="importLabel" for="importInput"></label>
+        <input id="importInput" type="file" accept="application/json,.json">
+        <span id="importStatus" class="saved-note"></span>
+      </div>
+      <details class="help">
+        <summary id="credHelpSummary"></summary>
+        <ol id="credSteps"></ol>
+      </details>
+
+      <div class="tile-meta" id="credManualNote"></div>
       <div class="field">
         <label id="keyLabel" for="keyInput"></label>
         <input id="keyInput" type="password" autocomplete="off" autocapitalize="off"
@@ -129,12 +174,6 @@
         <label id="uuidLabel" for="uuidInput"></label>
         <input id="uuidInput" type="text" autocomplete="off" autocapitalize="off"
                spellcheck="false" placeholder="uuid">
-      </div>
-
-      <div class="field">
-        <label id="importLabel" for="importInput"></label>
-        <input id="importInput" type="file" accept="application/json,.json">
-        <span id="importStatus" class="saved-note"></span>
       </div>
 
       <div class="sheet-actions">

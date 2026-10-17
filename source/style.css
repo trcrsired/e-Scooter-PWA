@@ -91,6 +91,15 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.device-name {
+  flex: 0 1 auto;
+  max-width: 44%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
 
 .icon-btn {
   flex: 0 0 auto;
@@ -427,6 +436,30 @@ select { cursor: pointer; }
 .saved-note { color: var(--accent); font-size: 0.85rem; margin-left: 4px; }
 .saved-note.error { color: var(--danger); }
 
+/* settings is a full-screen view */
+#settingsOverlay { align-items: stretch; background: var(--bg); }
+#settingsOverlay .sheet {
+  max-width: none;
+  max-height: none;
+  height: 100dvh;
+  border-radius: 0;
+  padding: calc(env(safe-area-inset-top) + 16px) 18px calc(env(safe-area-inset-bottom) + 24px);
+}
+.sheet-section-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 22px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.sheet-hint.small { font-size: 0.8rem; margin-bottom: 8px; }
+.sheet-hint a { color: var(--accent); }
+.help { margin: 0 0 16px; font-size: 0.82rem; color: var(--muted); }
+.help summary { cursor: pointer; color: var(--accent); }
+.help ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 6px; }
+
 /* ---------------- diagnostics ---------------- */
 .log-wrap {
   width: 100%;
@@ -542,18 +575,23 @@ main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 .speed-unit { font-size: 1.1rem; color: var(--muted); font-weight: 600; }
 .speed-state { margin-top: 6px; font-size: 0.78rem; color: var(--muted); min-height: 1em; }
 
-.mode-badge {
-  display: inline-block;
-  margin: 0 auto 10px;
-  padding: 4px 14px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 0.9rem;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+.mode-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+.mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-2);
+  color: var(--fg);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
 }
-.mode-badge[hidden] { display: none; }
+.mode-btn .mode-emoji { font-size: 1.15rem; line-height: 1; }
+.mode-btn.is-active { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
 
 .ride-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
 .stat {
