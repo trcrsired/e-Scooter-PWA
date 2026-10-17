@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.26";
+const APP_VERSION = "0.7.27";
 
 // -------------------------
 // 1. Localization dictionary
@@ -83,7 +83,8 @@ const i18n = {
     gps_unsupported: "Geolocation isn't available in this browser/context.",
     announce_title: "Speed announcements",
     every_s: "every (s)",
-    times: "times",
+    times: "times (\u221e)",
+    tts_min_speed: "voice only announces above 5 km/h",
     tts_off: "Voice off",
     tts_on: (n, m) => `Voice on · ${n}s` + (m > 0 ? " × " + m : " · unlimited"),
     tts_unavailable: "Speech synthesis unavailable",
@@ -91,7 +92,9 @@ const i18n = {
     volt: "Voltage",
     temp: "Temp",
     odo: "Odometer",
+    panel_speed: "Scooter speed",
     dp_lock: "lock",
+    dp_panel_speed: "panel speed",
     dp_battery: "battery",
     dp_headlight: "headlight",
     dp_odometer: "total distance",
@@ -277,7 +280,8 @@ const i18n = {
     gps_unsupported: "此浏览器/环境不支持定位。",
     announce_title: "语音播报",
     every_s: "间隔（秒）",
-    times: "次数",
+    times: "次数（∞）",
+    tts_min_speed: "仅在高于 5 km/h 时语音播报",
     tts_off: "语音关闭",
     tts_on: (n, m) => `语音开启 · ${n} 秒` + (m > 0 ? " × " + m : " · 不限次数"),
     tts_unavailable: "此环境不支持语音合成",
@@ -285,7 +289,9 @@ const i18n = {
     volt: "电压",
     temp: "温度",
     odo: "总里程",
+    panel_speed: "面板车速",
     dp_lock: "锁",
+    dp_panel_speed: "面板车速",
     dp_battery: "电量",
     dp_headlight: "大灯",
     dp_odometer: "总里程",
@@ -503,6 +509,7 @@ function applyStatic() {
   $("announceTitle").textContent = t.announce_title;
   $("lblEvery").textContent = t.every_s;
   $("lblTimes").textContent = t.times;
+  $("ttsHint").textContent = t.tts_min_speed;
   $("warnTitle").textContent = t.warn_title;
   $("lblWarnAbove").textContent = t.warn_above;
   $("langSelect").value = lang;
@@ -1262,6 +1269,7 @@ const dpUi = new Map(); // dp_id -> [update fn]
 // "dp 1 (lock)" instead of a bare "dp 1".
 const KNOWN_DPS = {
   1: "dp_lock",
+  2: "dp_panel_speed",
   3: "dp_battery",
   8: "dp_headlight",
   11: "dp_panel_unit",
@@ -1732,9 +1740,9 @@ function onDp(dp) {
 // 8b. Ride view: GPS speed, units, scooter read-outs, voice
 // -------------------------
 const UNITS = {
-  kmh: { speed: 1, speedLabel: "km/h", dist: 0.001, distKm: 1, distLabel: "km", distDec: 2, speak: { en: "km per h", zh: "\u516c\u91cc\u6bcf\u5c0f\u65f6" } },
-  mph: { speed: 0.621371, speedLabel: "mph", dist: 0.000621371, distKm: 0.621371, distLabel: "mi", distDec: 2, speak: { en: "miles per h", zh: "\u82f1\u91cc\u6bcf\u5c0f\u65f6" } },
-  ms: { speed: 0.277778, speedLabel: "m/s", dist: 1, distKm: 1000, distLabel: "m", distDec: 1, speak: { en: "m per s", zh: "\u7c73\u6bcf\u79d2" } },
+  kmh: { speed: 1, speedLabel: "km/h", dist: 0.001, distKm: 1, distLabel: "km", distDec: 2, speak: { en: "kilometers per hour", zh: "\u516c\u91cc\u6bcf\u5c0f\u65f6" } },
+  mph: { speed: 0.621371, speedLabel: "mph", dist: 0.000621371, distKm: 0.621371, distLabel: "mi", distDec: 2, speak: { en: "miles per hour", zh: "\u82f1\u91cc\u6bcf\u5c0f\u65f6" } },
+  ms: { speed: 0.277778, speedLabel: "m/s", dist: 1, distKm: 1000, distLabel: "m", distDec: 1, speak: { en: "meters per second", zh: "\u7c73\u6bcf\u79d2" } },
 };
 const LS_UNIT = "escooter.unit";
 let unit = localStorage.getItem(LS_UNIT) || "kmh";
@@ -1826,7 +1834,7 @@ const Geo = {
     this.watchId = navigator.geolocation.watchPosition(
       (p) => this.onPos(p),
       (e) => { log("gps error: " + (e && e.message)); $("rideGpsState").textContent = t.gps_error + (e && e.message ? ": " + e.message : ""); },
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+      { enableHighAccuracy: true, maximumAge: 500, timeout: 15000 }
     );
     this.render();
   },
@@ -1841,24 +1849,27 @@ const Geo = {
   },
   onPos(pos) {
     const c = pos.coords, tms = pos.timestamp || Date.now();
-    let inst = null;
+    const native = (typeof c.speed === "number" && isFinite(c.speed) && c.speed >= 0) ? c.speed : null;
+    let moved = 0, dt = 0;
     if (this.lastPos) {
-      const dt = (tms - this.lastPos.t) / 1000;
+      dt = (tms - this.lastPos.t) / 1000;
       if (dt > 0) {
         const d = haversine(this.lastPos, { lat: c.latitude, lon: c.longitude });
-        if (dt <= 10 && d <= 300) {           // reject teleports / stale fixes
-          inst = (d / dt) * 3.6;
-          if (inst > 1.5) this.tripM += d;     // only accumulate while moving
-        }
+        if (dt <= 10 && d <= 300) moved = d;   // reject teleports / stale fixes
       }
     }
-    // The device's own doppler speed is preferred when present.
-    if (c.speed != null && isFinite(c.speed) && c.speed >= 0) inst = c.speed * 3.6;
-    if (inst == null) inst = this.speedKmh;
-    this.speedKmh = this.speedKmh * 0.4 + inst * 0.6;  // EMA smoothing
+    if (native != null) {
+      // The device's own GNSS speed (coords.speed, in m/s) is authoritative —
+      // use it directly, like pwa-geolocation, instead of the noisy distance/dt.
+      this.speedKmh = native * 3.6;
+    } else if (dt > 0 && moved > 0) {
+      const inst = (moved / dt) * 3.6;
+      this.speedKmh = this.speedKmh * 0.4 + inst * 0.6;  // EMA fallback
+    }
     if (this.speedKmh < 1) this.speedKmh = 0;
     if (this.speedKmh > this.maxKmh) this.maxKmh = this.speedKmh;
     if (this.speedKmh > 0) { this.sumKmh += this.speedKmh; this.samples++; }
+    if (moved > 0 && this.speedKmh >= 1) this.tripM += moved;  // only while moving
     this.lastPos = { lat: c.latitude, lon: c.longitude, t: tms };
     $("rideGpsState").textContent = t.gps_tracking + (c.accuracy ? "  ±" + Math.round(c.accuracy) + " m" : "");
     $("rideGpsCoords").textContent = "\ud83d\udccd " + c.latitude.toFixed(6) + ", " + c.longitude.toFixed(6);
@@ -1880,6 +1891,7 @@ $("gpsBtn").onclick = () => (Geo.running ? Geo.stop() : Geo.start());
 // reports; scale is decoded from the value (voltage /100, temp /10). dp 3 is a
 // best guess for battery percentage until the DP spec confirms it.
 const RIDE_CARDS = [
+  { id: 2, label: () => t.panel_speed, scale: 0, speed: true }, // scooter's own panel speed
   { id: 3, label: () => t.batt, scale: 0, unit: "%" },
   { id: 20, label: () => t.volt, scale: 2, unit: "V" },
   { id: 18, label: () => t.temp, scale: 1, unit: "°C" },
@@ -1896,13 +1908,19 @@ function buildRideCards() {
     const val = document.createElement("div"); val.className = "tile-value"; val.textContent = "–";
     tile.appendChild(lab); tile.appendChild(val);
     host.appendChild(tile);
-    rideCards.set(c.id, { el: val, scale: c.scale, unit: c.unit, odo: !!c.odo, raw: undefined });
+    rideCards.set(c.id, { el: val, scale: c.scale, unit: c.unit, odo: !!c.odo, speed: !!c.speed, raw: undefined });
   }
 }
 function updateRideCard(id, v) {
   const e = rideCards.get(id);
   if (!e || typeof v !== "number") return;
   e.raw = v;
+  if (e.speed) {
+    // dp 2 is the scooter's own panel speed (km/h); show it in the app's unit.
+    const u = UNITS[unit];
+    e.el.textContent = Math.round((v / Math.pow(10, e.scale)) * u.speed) + " " + u.speedLabel;
+    return;
+  }
   if (e.odo) {
     // dp 12 is ten times the kilometre value (24034 -> 2403.4 km).
     const u = UNITS[unit];
@@ -2319,11 +2337,14 @@ const Announce = {
     updateTtsState();
   },
   speak() {
+    // Below 5 km/h we stay silent (so it doesn't read "0 km/h" at every
+    // stop); the repeat loop keeps running regardless.
+    if (Geo.speedKmh < 5) { log("tts skipped: below 5 km/h"); return; }
     this.count++;
     const U = UNITS[unit];
     const v = Math.round(Geo.speedKmh * U.speed);
     const spoken = (U.speak && (U.speak[lang] || U.speak.en)) || U.speedLabel;
-    const text = v + " " + spoken;   // "22 km per h" reads naturally out loud
+    const text = v + " " + spoken;   // e.g. "22 kilometers per hour"
     log("tts " + this.count + ": " + text);
     try {
       window.speechSynthesis.cancel();

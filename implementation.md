@@ -54,13 +54,15 @@ The main area has two tabs (the **Debug** tab is hidden by default — tap the
 version number in the header five times to reveal the whole tab bar, five more
 to hide it again; the choice is remembered in `localStorage`):
 
-- **Ride** — a speed dashboard. A big hero shows your *GPS* speed (from the
-  browser's `navigator.geolocation`, Haversine distance + device doppler speed,
-  exponentially smoothed) with trip / max / average / elapsed time, plus your
+- **Ride** — a speed dashboard. A big hero shows your *GPS* speed. When the
+  browser's Geolocation API supplies `coords.speed` (GNSS doppler) it is used
+  **directly**, exactly like `pwa-geolocation`; otherwise the app falls back to a
+  Haversine distance ÷ time estimate with light EMA smoothing. Alongside it:
+  trip / max / average / elapsed time, plus your
   live **GPS coordinates** (📍 latitude, longitude, 6 dp) while tracking. Pick the
   display unit (**km/h**, **mph** or **m/s**). Tracking is manual: press
-  **Start tracking**. The scooter's own read-outs (battery, voltage, temp, and
-  the lifetime odometer — dp 12, raw ÷ 10 = km) are
+  **Start tracking**. The scooter's own read-outs (panel speed, battery, voltage,
+  temp, and the lifetime odometer — dp 12, raw ÷ 10 = km) are
   shown as cards. A **mode selector** (🚶 Walk / 🍃 Eco / 🛴 行驶 / ⚡ 运动) shows
   the current ride mode from the gear datapoint (dp 15) and lets you switch it
   (**sent immediately, no confirmation gate** — switching gear is a routine,
@@ -76,8 +78,10 @@ to hide it again; the choice is remembered in `localStorage`):
   result with a read-back.
   An optional **speed announcement**
   toggle speaks the current speed with the Web Speech API every *N* seconds
-  (default 30) for at most *M* times (`0` = unlimited) — kept minimal and spoken
-  in a natural form (e.g. “22 km per h”). A separate **speed warning**
+  (default 30). It is **unlimited by default** — leave the *times* box empty
+  (shown as `∞`) to loop forever, or set a count. It stays **silent below 5 km/h**
+  (so it never reads “0” at a stop). Spoken naturally, e.g. “22 kilometers per
+  hour”. A separate **speed warning**
   toggle (with a threshold in the current unit) flashes the hero red, vibrates
   and toasts when you ride faster than the limit.
 - **Debug** — the raw datapoint UI: the safety note, the auto-generated
