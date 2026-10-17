@@ -16,7 +16,10 @@ A GPLv3 free-software PWA for a Tuya BLE e-scooter. For the project overview see
     remember the last state each scooter reported.
   - `sw.js` — service worker (offline cache). **Bump `SW_VERSION` at the top
     every time this file changes**; a new version string invalidates the old
-    cache so the installed PWA updates.
+    cache so the installed PWA updates. It uses **stale-while-revalidate**: the
+    app shell is served from the cache instantly and refreshed in the background,
+    so a slow or dead connection never delays the load. Navigations fall back to
+    the cached root (`./`, the manifest's `start_url`).
   - `sw-register.js` — registers the service worker and reloads once a new
     version takes over.
 - `cpp/` — `tuya_crypto.cpp`, built to `source/tuya_crypto.wasm` with

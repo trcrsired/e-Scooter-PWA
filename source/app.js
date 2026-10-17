@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.29";
+const APP_VERSION = "0.7.30";
 
 // -------------------------
 // 1. Localization dictionary
