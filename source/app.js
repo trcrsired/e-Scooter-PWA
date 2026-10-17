@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.23";
+const APP_VERSION = "0.7.24";
 
 // -------------------------
 // 1. Localization dictionary
@@ -166,6 +166,11 @@ const i18n = {
     start_sent: "Start mode sent",
     start_applied: v => `Start mode confirmed: ${v}`,
     start_rejected: v => `Start mode not applied (still ${v})`,
+    offline_title: "Auto-off time",
+    offline_label: "Idle time before the scooter powers off (dp 104, minutes, 5\u201390)",
+    offline_save: "Send auto-off time",
+    offline_sent: "Auto-off time sent",
+    offline_saved: "Auto-off time saved",
     speed_save: "Send speed limits",
     speed_sent: "Speed limits sent",
     speed_saved: "Speed limits saved",
@@ -332,6 +337,11 @@ const i18n = {
     start_sent: "启动方式已发送",
     start_applied: v => `启动方式已确认：${v}`,
     start_rejected: v => `启动方式未生效（仍为 ${v}）`,
+    offline_title: "自动关机时间",
+    offline_label: "静止多久后滑板车自动关机（dp 104，分钟，5\u201390）",
+    offline_save: "发送自动关机时间",
+    offline_sent: "自动关机时间已发送",
+    offline_saved: "自动关机时间已保存",
     speed_save: "发送速度限制",
     speed_sent: "速度限制已发送",
     speed_saved: "速度限制已保存",
@@ -401,6 +411,9 @@ function applyStatic() {
     startSel.options[0].textContent = t.start_direct;
     startSel.options[1].textContent = t.start_run;
   }
+  $("offlineTitle").textContent = t.offline_title;
+  $("offlineLabel").textContent = t.offline_label;
+  $("offlineSaveBtn").textContent = t.offline_save;
   $("credTitle").textContent = t.credential_title;
   $("credHintText").textContent = t.cred_hint;
   $("credHelpSummary").textContent = t.cred_help;
@@ -692,6 +705,7 @@ function loadDeviceIntoForm(dev) {
   $("btNameInput").value = dev.bt_name || "";
   $("deviceName").textContent = dev.device_name || "";
   loadSpeedInputs(dev);
+  loadOfflineInput(dev);
 }
 
 // Pick the scooter at index i as the active one and load it everywhere.
@@ -739,6 +753,7 @@ function mergeImported(dev, i) {
   if (dev.bt_name) out.bt_name = dev.bt_name;
   if (dev.speeds && typeof dev.speeds === "object") out.speeds = dev.speeds;
   if (dev.ranges && typeof dev.ranges === "object") out.ranges = dev.ranges;
+  if (Number.isFinite(Number(dev.offline_min))) out.offline_min = Number(dev.offline_min);
   return out;
 }
 
@@ -1102,6 +1117,7 @@ function refillFromLastDp() {
     updateLock(id, v, undefined);
     updateHeadlight(id, v, undefined);
     updateStartMode(id, v, undefined);
+    updateOffline(id, v);
   }
 }
 
@@ -1626,6 +1642,7 @@ function onDp(dp) {
   updateLock(dp.id, dp.value, dp.type);
   updateHeadlight(dp.id, dp.value, dp.type);
   updateStartMode(dp.id, dp.value, dp.type);
+  updateOffline(dp.id, dp.value);
 }
 
 // -------------------------
@@ -2051,6 +2068,43 @@ function updateStartMode(id, v, type) {
     toast(ok ? t.start_applied(startModeLabel(currentStartMode))
       : t.start_rejected(startModeLabel(currentStartMode)));
   }
+}
+
+// ---- auto-off time (dp 104) ----
+// Idle minutes before the scooter powers its radios off (range 5-90, default 60).
+// Config-style, so it lives in Settings and writes through the confirm gate.
+const OFFLINE_DP = 104;
+let currentOffline = null;
+
+function loadOfflineInput(dev) {
+  const v = Number(dev && dev.offline_min);
+  $("offlineMin").value = Number.isFinite(v) && v > 0 ? String(Math.round(v)) : "";
+}
+
+$("offlineSaveBtn").addEventListener("click", () => {
+  const dev = importedDevices[activeIndex] || {};
+  const el = $("offlineMin");
+  let v = Math.round(Number(el.value));
+  const done = () => {
+    $("offlineStatus").textContent = t.offline_saved;
+    setTimeout(() => { $("offlineStatus").textContent = ""; }, 2500);
+  };
+  if (!Number.isFinite(v)) { el.value = ""; toast(t.offline_saved); return; }
+  v = Math.max(5, Math.min(90, v));
+  el.value = String(v);
+  updateActiveDevice({ offline_min: v });
+  if (!tuya) { done(); toast(t.status_disconnected); return; }
+  if (!armed) { done(); toast(t.arm_needed); return; }
+  requestSend(OFFLINE_DP, DT.VALUE, v, v + " min", null, null);
+  $("offlineStatus").textContent = t.offline_sent;
+  setTimeout(() => { $("offlineStatus").textContent = ""; }, 2500);
+});
+
+function updateOffline(id, v) {
+  if (id !== OFFLINE_DP || typeof v !== "number") return;
+  currentOffline = v;
+  const el = $("offlineMin");
+  if (el && document.activeElement !== el) el.value = String(v);
 }
 
 // ---- voice speed announcements (Web Speech API) ----

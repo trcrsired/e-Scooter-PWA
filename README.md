@@ -26,6 +26,8 @@ scooter's datapoints.
   (datapoints 101 / 102 / 103), each with an editable allowed range.
 - **Start mode** — choose how the scooter pulls away (dp 16): start directly on
   the throttle, or run/push to start.
+- **Auto-off time** — how long the scooter stays on when idle before going
+  offline (dp 104, 5–90 minutes, default 60).
 - **Debug view** — the raw datapoint controls, a manual datapoint sender, a
   button to dump every known datapoint to a timestamped JSON file, and a
   diagnostics log.

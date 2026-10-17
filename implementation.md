@@ -110,6 +110,9 @@ The main area has two tabs:
 - **Start mode** — how the scooter pulls away from a standstill (dp 16, an
   ENUM): `0` = start directly on the throttle, `1` = run/push to start. Shown as
   a selector, written through the usual confirmation + read-back verification.
+- **Auto-off time** — idle minutes before the scooter powers its radios off
+  (dp 104, VALUE, range 5–90, default 60). Clamped to that range, stored per
+  profile, and written through the confirmation gate.
 - **Credential** — importing your scooter's JSON from the Tuya IoT platform is
   the preferred way (there is a short step-by-step guide and a link to
   <https://iot.tuya.com/> right there). Manual `local_key` / `device_id` /
