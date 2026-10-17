@@ -49,13 +49,17 @@ The main area has two tabs:
   the current ride mode from the gear datapoint (dp 15) and lets you switch it
   (through the usual confirmation gate). An optional **speed announcement**
   toggle speaks the current speed with the Web Speech API every *N* seconds
-  (default 30) for at most *M* times (`0` = unlimited).
+  (default 30) for at most *M* times (`0` = unlimited) — the phrase is kept as
+  short as possible (just the number and unit). A separate **speed warning**
+  toggle (with a threshold in the current unit) flashes the hero red, vibrates
+  and toasts when you ride faster than the limit.
 - **Debug** — the raw datapoint UI: the safety note, the auto-generated
   spec-driven controls, the manual datapoint sender and the diagnostics log.
 
 **Settings** (the ⚙ button) is a full-screen view with sections:
 - **Language** — interface language (English / 中文) and which speech voice the
-  announcements use.
+  announcements use. The list shows every voice the browser exposes; picking one
+  also switches the announcement language to match the voice.
 - **Scooter** — manage several scooters entirely in the UI: a picker to switch
   the active one, **Add** to create another, **Remove** to delete one, and the
   scooter's name (shown in the app bar). Importing a JSON merges into this list,

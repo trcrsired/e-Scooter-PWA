@@ -595,6 +595,9 @@ main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
 .speed-unit { font-size: 1.1rem; color: var(--muted); font-weight: 600; }
 .speed-state { margin-top: 6px; font-size: 0.78rem; color: var(--muted); min-height: 1em; }
+.speed-value #rideSpeed.is-warn { color: #ff4d4f; animation: warn-pulse 0.9s ease-in-out infinite; }
+@keyframes warn-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+#warnUnit { opacity: 0.75; }
 
 .mode-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
 .mode-btn {

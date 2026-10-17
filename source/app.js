@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.6";
+const APP_VERSION = "0.7.7";
 
 // -------------------------
 // 1. Localization dictionary
@@ -112,6 +112,13 @@ const i18n = {
     import_ok: name => `Loaded ${name}`,
     import_none: "No device found in that file.",
     import_err: msg => `Import failed: ${msg}`,
+    device_add: "Add",
+    device_remove: "Remove",
+    warn_title: "Speed warning",
+    warn_above: "warn above",
+    warn_off: "Speed warning off",
+    warn_at: (v, u) => `Warn above ${v} ${u}`,
+    warn_over: (v, u) => `\u26a0 Too fast \u2014 ${v} ${u}`,
   },
   zh: {
     title: "电动滑板车",
@@ -217,6 +224,13 @@ const i18n = {
     import_ok: name => `已加载 ${name}`,
     import_none: "文件中未找到设备。",
     import_err: msg => `导入失败：${msg}`,
+    device_add: "添加",
+    device_remove: "删除",
+    warn_title: "速度警告",
+    warn_above: "超过",
+    warn_off: "速度警告已关闭",
+    warn_at: (v, u) => `超过 ${v} ${u} 时警告`,
+    warn_over: (v, u) => `\u26a0 超速 —— ${v} ${u}`,
   }
 };
 
@@ -260,6 +274,8 @@ function applyStatic() {
   $("deviceTitle").textContent = t.device_title;
   $("deviceNameLabel").textContent = t.device_name_label;
   $("devicePickLabel").textContent = t.device_pick_label;
+  $("deviceAddBtn").textContent = t.device_add;
+  $("deviceRemoveBtn").textContent = t.device_remove;
   $("credTitle").textContent = t.credential_title;
   $("credHintText").textContent = t.cred_hint;
   $("credHelpSummary").textContent = t.cred_help;
@@ -295,6 +311,8 @@ function applyStatic() {
   $("announceTitle").textContent = t.announce_title;
   $("lblEvery").textContent = t.every_s;
   $("lblTimes").textContent = t.times;
+  $("warnTitle").textContent = t.warn_title;
+  $("lblWarnAbove").textContent = t.warn_above;
   $("langSelect").value = lang;
 }
 applyStatic();
@@ -443,6 +461,8 @@ uuidInput.value = localStorage.getItem(LS_UUID) || "";
 function openSettings() {
   overlay.hidden = false;
   requestAnimationFrame(() => overlay.classList.add("open"));
+  // Voice lists are sometimes empty until the engine has warmed up; refresh.
+  if (typeof populateVoices === "function") populateVoices();
 }
 function closeSettings() {
   overlay.classList.remove("open");
@@ -474,8 +494,26 @@ let activeIndex = 0;
 function deviceLabel(d, i) {
   return (d && (d.device_name || d.name || d.model)) || ("Scooter " + (i + 1));
 }
-function deviceIdOf(d) {
-  return (d && (d.device_id || d.deviceId || d.id || d.uuid)) || "";
+// Device id / uuid keys used for matching imports to saved profiles. The Tuya
+// device list reports the id under "id", not "device_id", so both are accepted.
+function deviceKey(d) { return String((d && (d.device_id || d.deviceId || d.id)) || "").toLowerCase(); }
+function deviceUuid(d) { return String((d && d.uuid) || "").toLowerCase(); }
+function sameDevice(a, b) {
+  const ka = deviceKey(a), kb = deviceKey(b);
+  if (ka && kb && ka === kb) return true;
+  const ua = deviceUuid(a), ub = deviceUuid(b);
+  return !!(ua && ub && ua === ub);
+}
+// Never clobber a profile's existing value with an empty one from a file
+// (Tuya's device list returns local_key: "").
+function mergeDeviceFields(existing, incoming) {
+  const out = Object.assign({}, existing);
+  for (const [k, v] of Object.entries(incoming)) {
+    if (v === "" || v == null) continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    out[k] = v;
+  }
+  return out;
 }
 
 function collectDevices(data) {
@@ -578,10 +616,9 @@ function importConfig(data) {
   let focus = activeIndex;
   for (let i = 0; i < list.length; i++) {
     const dev = mergeImported(list[i], i);
-    const key = deviceIdOf(dev);
-    const at = key ? importedDevices.findIndex(d => deviceIdOf(d) === key) : -1;
+    const at = importedDevices.findIndex(d => sameDevice(d, dev));
     if (at >= 0) {
-      importedDevices[at] = Object.assign({}, importedDevices[at], dev);
+      importedDevices[at] = mergeDeviceFields(importedDevices[at], dev);
       focus = at;
     } else {
       importedDevices.push(dev);
@@ -644,10 +681,38 @@ function restoreDevices() {
     const saved = JSON.parse(localStorage.getItem(LS_DEVICES) || "[]");
     if (Array.isArray(saved) && saved.length) importedDevices = saved;
   } catch (_) {}
+  const hadSavedList = importedDevices.length > 0;
   ensureDevices();
-  const savedId = localStorage.getItem(LS_DEVID) || "";
-  let idx = importedDevices.findIndex(d => deviceIdOf(d) === savedId);
+
+  // One-time migration: older versions stored a single scooter's credentials in
+  // escooter.local_key / .device_id / .uuid. Fold them into the list so the
+  // chosen profile still has its keys after this multi-device refactor.
+  const legacy = {
+    local_key: localStorage.getItem(LS_KEY) || "",
+    device_id: localStorage.getItem(LS_DEVID) || "",
+    uuid: localStorage.getItem(LS_UUID) || "",
+  };
+  const hasLegacy = !!(legacy.local_key || legacy.device_id || legacy.uuid);
+  if (hasLegacy && !hadSavedList) {
+    Object.assign(importedDevices[0], legacy, {
+      device_name: localStorage.getItem(LS_NAME) || importedDevices[0].device_name || "Scooter 1",
+    });
+    persistDevices();
+    log("migrated your saved credentials into profile 1");
+  } else if (hasLegacy && legacy.device_id) {
+    const match = importedDevices.find(d => !d.local_key && deviceKey(d) === legacy.device_id.toLowerCase());
+    if (match) { match.local_key = legacy.local_key; match.uuid = match.uuid || legacy.uuid; persistDevices(); }
+  }
+
+  // Pick the last active profile. Match by device id or uuid, and guard against
+  // an empty saved id matching a blank profile (which would override the saved
+  // active index).
+  const savedId = (localStorage.getItem(LS_DEVID) || "").toLowerCase();
+  let idx = savedId
+    ? importedDevices.findIndex(d => deviceKey(d) === savedId || deviceUuid(d) === savedId)
+    : -1;
   if (idx < 0) idx = Number(localStorage.getItem(LS_ACTIVE) || 0);
+  if (!(idx >= 0 && idx < importedDevices.length)) idx = 0;
   selectDevice(idx);
   const dev = importedDevices[activeIndex];
   if (dev && (dev.functions || dev.status)) {
@@ -1078,8 +1143,52 @@ function setUnit(u) {
   $("rideAvgUnit").textContent = UNITS[u].speedLabel;
   $("rideTripUnit").textContent = UNITS[u].distLabel;
   Geo.render();
+  if (typeof updateWarnUi === "function") updateWarnUi();
 }
 for (const [u, b] of Object.entries(unitBtns)) b.onclick = () => setUnit(u);
+
+// ---- speed warning ----
+const LS_WARN = "escooter.warn";
+const LS_WARNKMH = "escooter.warn_kmh";
+const Warn = {
+  on: localStorage.getItem(LS_WARN) === "1",
+  kmh: Number(localStorage.getItem(LS_WARNKMH)) || 25,
+  was: false,
+};
+const warnToggle = $("warnToggle");
+const warnSpeed = $("warnSpeed");
+function warnDisplay() { return Math.round(Warn.kmh * UNITS[unit].speed); }
+function updateWarnUi() {
+  $("warnUnit").textContent = UNITS[unit].speedLabel;
+  if (document.activeElement !== warnSpeed) warnSpeed.value = String(warnDisplay());
+  warnToggle.checked = Warn.on;
+  $("warnState").textContent = Warn.on ? t.warn_at(warnDisplay(), UNITS[unit].speedLabel) : t.warn_off;
+}
+warnToggle.addEventListener("change", () => {
+  Warn.on = warnToggle.checked;
+  localStorage.setItem(LS_WARN, Warn.on ? "1" : "0");
+  Warn.was = false;
+  updateWarnUi();
+});
+warnSpeed.addEventListener("change", () => {
+  const v = Math.max(1, Number(warnSpeed.value) || 1);
+  Warn.kmh = v / UNITS[unit].speed;
+  localStorage.setItem(LS_WARNKMH, String(Warn.kmh));
+  updateWarnUi();
+});
+function checkSpeedWarn() {
+  const U = UNITS[unit];
+  const over = Warn.on && Geo.running && Geo.speedKmh > Warn.kmh;
+  $("rideSpeed").classList.toggle("is-warn", over);
+  if (over && !Warn.was) {
+    Warn.was = true;
+    toast(t.warn_over(Math.round(Geo.speedKmh * U.speed), U.speedLabel));
+    if (navigator.vibrate) { try { navigator.vibrate(200); } catch (_) {} }
+  } else if (!over) {
+    Warn.was = false;
+  }
+}
+updateWarnUi();
 
 function haversine(a, b) {
   const R = 6371000, rad = (d) => (d * Math.PI) / 180;
@@ -1150,6 +1259,7 @@ const Geo = {
     $("rideMax").textContent = String(Math.round(this.maxKmh * U.speed));
     $("rideAvg").textContent = this.samples ? String(Math.round((this.sumKmh / this.samples) * U.speed)) : "0";
     $("rideTime").textContent = fmtTime(this.running ? (Date.now() - this.startedAt) / 1000 : 0);
+    checkSpeedWarn();
   },
 };
 $("gpsBtn").onclick = () => (Geo.running ? Geo.stop() : Geo.start());
@@ -1281,7 +1391,15 @@ function selectedVoice() {
   const uri = voiceSelect.value;
   return (window.speechSynthesis.getVoices() || []).find(v => (v.voiceURI || v.name) === uri) || null;
 }
-voiceSelect.addEventListener("change", () => localStorage.setItem(LS_VOICE, voiceSelect.value));
+voiceSelect.addEventListener("change", () => {
+  localStorage.setItem(LS_VOICE, voiceSelect.value);
+  // The chosen voice also selects the announcement language, so the spoken
+  // words match the voice instead of being read by a mismatched engine.
+  const v = selectedVoice();
+  const base = v ? String(v.lang || "").toLowerCase().split("-")[0] : "";
+  if (base && i18n[base] && base !== lang) setLang(base);
+  else populateVoices();
+});
 if ("speechSynthesis" in window) {
   populateVoices();
   window.speechSynthesis.onvoiceschanged = populateVoices;
@@ -1307,7 +1425,7 @@ const Announce = {
     this.count++;
     const U = UNITS[unit];
     const v = Math.round(Geo.speedKmh * U.speed);
-    const text = lang === "zh" ? `当前速度 ${v} ${U.speedLabel}` : `Current speed ${v} ${U.speedLabel}`;
+    const text = v + " " + U.speedLabel;   // keep it as short as possible
     log("tts " + this.count + ": " + text);
     try {
       window.speechSynthesis.cancel();
@@ -1370,6 +1488,7 @@ function setLang(l) {
   Geo.render();
   setConnected(!!tuya);
   populateVoices();
+  updateWarnUi();
   log("language: " + l);
 }
 $("langSelect").addEventListener("change", () => setLang($("langSelect").value));
