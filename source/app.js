@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.5.0";
+const APP_VERSION = "0.6.0";
 
 // -------------------------
 // 1. Localization dictionary
@@ -25,15 +25,13 @@ const i18n = {
     bt_unsupported: "Web Bluetooth isn't available here. Use Chrome/Edge on Android or desktop, served over HTTPS (or localhost).",
     bt_gesture: "The browser blocked the device chooser. Tap Connect again.",
     settings: "Settings",
-    settings_hint: "Credentials come from the Tuya cloud. Serving keys.json next to the app loads them automatically, or enter them here (stored only in this browser).",
+    settings_hint: "Credentials come from the Tuya cloud. Enter them here (stored only in this browser).",
     key_label: "Local key",
     devid_label: "Device ID",
     uuid_label: "Device UUID",
     save: "Save",
     saved: "Saved",
-    missing: "Fill in local key, device ID and UUID, or add a keys.json",
-    keys_loaded: name => `Loaded credentials for ${name}`,
-    keys_none: "No keys.json found — open Settings and enter credentials.",
+    missing: "Fill in local key, device ID and UUID",
     wasm_ok: "crypto module loaded",
     wasm_missing: "tuya_crypto.wasm not found — run the build in cpp/",
     section_controls: "Controls",
@@ -85,6 +83,15 @@ const i18n = {
     batt: "Battery",
     volt: "Voltage",
     temp: "Temp",
+    mode_walk: "Walk",
+    mode_eco: "Eco",
+    mode_d: "D",
+    mode_s: "S",
+    mode_unknown: v => `Mode ${v}`,
+    import_label: "Load JSON config",
+    import_ok: name => `Loaded ${name}`,
+    import_none: "No device found in that file.",
+    import_err: msg => `Import failed: ${msg}`,
   },
   zh: {
     title: "电动滑板车",
@@ -103,15 +110,13 @@ const i18n = {
     bt_unsupported: "此环境不支持 Web 蓝牙。请使用 Android 或桌面版 Chrome/Edge，并通过 HTTPS（或 localhost）访问。",
     bt_gesture: "浏览器阻止了设备选择器。请再次点击连接。",
     settings: "设置",
-    settings_hint: "凭据来自涂鸦云。将 keys.json 与应用一起提供会自动加载，也可在此手动填写（仅保存在本浏览器）。",
+    settings_hint: "凭据来自涂鸦云，请在此手动填写（仅保存在本浏览器）。",
     key_label: "本地密钥",
     devid_label: "设备 ID",
     uuid_label: "设备 UUID",
     save: "保存",
     saved: "已保存",
-    missing: "请填写本地密钥、设备 ID 与 UUID，或添加 keys.json",
-    keys_loaded: name => `已加载 ${name} 的凭据`,
-    keys_none: "未找到 keys.json —— 请打开设置在下方填写凭据。",
+    missing: "请填写本地密钥、设备 ID 与 UUID",
     wasm_ok: "加密模块已加载",
     wasm_missing: "未找到 tuya_crypto.wasm —— 请在 cpp/ 中构建",
     section_controls: "控制",
@@ -163,6 +168,15 @@ const i18n = {
     batt: "电量",
     volt: "电压",
     temp: "温度",
+    mode_walk: "步行",
+    mode_eco: "经济",
+    mode_d: "D",
+    mode_s: "S",
+    mode_unknown: v => `模式 ${v}`,
+    import_label: "加载 JSON 配置",
+    import_ok: name => `已加载 ${name}`,
+    import_none: "文件中未找到设备。",
+    import_err: msg => `导入失败：${msg}`,
   }
 };
 
@@ -197,6 +211,7 @@ $("settingsHint").textContent = t.settings_hint;
 $("keyLabel").textContent = t.key_label;
 $("devIdLabel").textContent = t.devid_label;
 $("uuidLabel").textContent = t.uuid_label;
+$("importLabel").textContent = t.import_label;
 $("saveKeysBtn").textContent = t.save;
 $("diagSummary").textContent = t.diagnostics;
 $("clearLogBtn").textContent = t.clear_log;
@@ -340,18 +355,7 @@ function applyCreds(c) {
   uuidInput.value = c.uuid || "";
 }
 
-async function loadKeysFile() {
-  try {
-    const resp = await fetch("keys.json", { cache: "no-store" });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const devices = Object.values(data.devices || {});
-    return devices.length ? devices[0] : null;
-  } catch (_) { return null; }
-}
-
-keyInput.value = localStorage.getItem(LS_KEY) || "";
-devIdInput.value = localStorage.getItem(LS_DEVID) || "";
+keyInput.value = localStorage.getItem(LS_KEY) || "";devIdInput.value = localStorage.getItem(LS_DEVID) || "";
 uuidInput.value = localStorage.getItem(LS_UUID) || "";
 
 // -------------------------
@@ -379,6 +383,72 @@ $("saveKeysBtn").onclick = () => {
   keysStatus.classList.remove("error");
   setTimeout(() => { keysStatus.textContent = ""; }, 2000);
 };
+
+// -------------------------
+// 7b. Import a Tuya / keys.json config from the UI
+// -------------------------
+let gearOverride = null; // optional { valueKey: { icon, label } } from an import
+const importStatusEl = $("importStatus");
+
+function pickImportedDevice(data) {
+  if (data && data.devices && typeof data.devices === "object") {
+    const arr = Object.values(data.devices);
+    if (arr.length) return arr[0];
+  }
+  if (data && data.result && typeof data.result === "object") {
+    const r = data.result;
+    if (r.devices && typeof r.devices === "object") {
+      const arr = Object.values(r.devices);
+      if (arr.length) return arr[0];
+    }
+    return r;
+  }
+  return data || {};
+}
+
+function importConfig(data) {
+  const dev = pickImportedDevice(data);
+  const functions = dev.functions || data.functions || null;
+  const status = dev.status || data.status || null;
+  const localKey = dev.local_key || dev.localKey || "";
+  const deviceId = dev.device_id || dev.deviceId || dev.id || "";
+  const uuid = dev.uuid || "";
+  const name = dev.device_name || dev.name || dev.model || deviceId || "device";
+
+  if (!(localKey || deviceId || uuid || functions || status)) throw new Error("unrecognised file");
+
+  if (localKey || deviceId || uuid) {
+    keyInput.value = localKey || keyInput.value;
+    devIdInput.value = deviceId || devIdInput.value;
+    uuidInput.value = uuid || uuidInput.value;
+    localStorage.setItem(LS_KEY, keyInput.value);
+    localStorage.setItem(LS_DEVID, devIdInput.value);
+    localStorage.setItem(LS_UUID, uuidInput.value);
+  }
+  if (functions || status) {
+    deviceSpec = { functions: functions || [], status: status || [], name };
+    buildControls(deviceSpec);
+  }
+  const gm = data.gear_modes || dev.gear_modes;
+  if (gm && typeof gm === "object") gearOverride = gm;
+
+  importStatusEl.textContent = t.import_ok(name);
+  importStatusEl.classList.remove("error");
+  setTimeout(() => { importStatusEl.textContent = ""; }, 3000);
+  log("imported config: " + name + ((functions || status) ? " (spec + creds)" : " (credentials)"));
+}
+
+$("importInput").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    importConfig(JSON.parse(await file.text()));
+  } catch (err) {
+    importStatusEl.textContent = t.import_err(err && err.message ? err.message : err);
+    importStatusEl.classList.add("error");
+  }
+  e.target.value = "";
+});
 
 // -------------------------
 // 8. Datapoint spec -> UI
@@ -767,6 +837,7 @@ function onDp(dp) {
   if (handlers) for (const fn of handlers) fn(dp.value);
   addObservedTile(dp.id);
   updateRideCard(dp.id, dp.value);
+  updateGear(dp.id, dp.value);
 }
 
 // -------------------------
@@ -895,6 +966,38 @@ function updateRideCard(id, v) {
   if (!e || typeof v !== "number") return;
   const num = v / Math.pow(10, e.scale);
   e.el.textContent = (e.scale ? num.toFixed(e.scale) : num) + (e.unit ? " " + e.unit : "");
+}
+
+// Ride mode (Walk / Eco / D / S). DP 15 is the gear-selector candidate; its
+// value may be a number or a Tuya ENUM string. If the labels don't match your
+// scooter, override them with a "gear_modes" object in an imported config.
+const GEAR_DP = 15;
+const GEAR_MODES = {
+  walk: { icon: "🚶", label: () => t.mode_walk },
+  eco: { icon: "🍃", label: () => t.mode_eco },
+  d: { icon: "🛴", label: () => t.mode_d },
+  s: { icon: "⚡", label: () => t.mode_s },
+};
+const GEAR_ALIASES = {
+  "0": "walk", walk: "walk", pedestrian: "walk",
+  "1": "eco", eco: "eco", economy: "eco",
+  "2": "d", d: "d", drive: "d", normal: "d",
+  "3": "s", s: "s", sport: "s", turbo: "s",
+};
+function updateGear(id, v) {
+  if (id !== GEAR_DP) return;
+  const el = $("rideMode");
+  if (v == null) { el.hidden = true; return; }
+  const vk = String(v).toLowerCase();
+  const ov = gearOverride && (gearOverride[vk] || gearOverride[String(Number(v))]);
+  if (ov) {
+    el.hidden = false;
+    el.textContent = (ov.icon ? ov.icon + " " : "") + (ov.label || ov.name || vk);
+    return;
+  }
+  const mode = GEAR_MODES[GEAR_ALIASES[vk] || GEAR_ALIASES[String(Number(v))]];
+  el.hidden = false;
+  el.textContent = mode ? mode.icon + " " + mode.label() : t.mode_unknown(v);
 }
 
 // ---- voice speed announcements (Web Speech API) ----
@@ -1101,20 +1204,7 @@ $("copyLogBtn").onclick = async () => {
 (async function boot() {
   log("app v" + APP_VERSION);
   const ok = await Crypto.load();
-  const dev = await loadKeysFile();
-  if (dev) {
-    applyCreds({
-      localKey: dev.local_key || "",
-      deviceId: dev.device_id || "",
-      uuid: dev.uuid || "",
-    });
-    deviceSpec = { functions: dev.functions, status: dev.status, name: dev.device_name };
-    buildControls(deviceSpec);
-    log(t.keys_loaded(dev.device_name || dev.device_id));
-  } else {
-    log(t.keys_none);
-    buildControls(null);
-  }
+  buildControls(deviceSpec);
   buildRideCards();
   setUnit(unit);
   if (!ok) log("(connect is disabled until the crypto module loads)");

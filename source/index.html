@@ -45,6 +45,7 @@
       </div>
 
       <div class="speed-hero">
+        <div class="mode-badge" id="rideMode" hidden></div>
         <div class="speed-value"><span id="rideSpeed">0</span><span class="speed-unit" id="rideSpeedUnit">km/h</span></div>
         <div class="speed-state" id="rideGpsState"></div>
       </div>
@@ -128,6 +129,12 @@
         <label id="uuidLabel" for="uuidInput"></label>
         <input id="uuidInput" type="text" autocomplete="off" autocapitalize="off"
                spellcheck="false" placeholder="uuid">
+      </div>
+
+      <div class="field">
+        <label id="importLabel" for="importInput"></label>
+        <input id="importInput" type="file" accept="application/json,.json">
+        <span id="importStatus" class="saved-note"></span>
       </div>
 
       <div class="sheet-actions">

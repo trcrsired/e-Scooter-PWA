@@ -17,17 +17,19 @@ a GPLv3 free software of PWA for e-scooter
 ## Usage
 
 ```
-.venv/bin/python tools/fetch_keys.py          # writes source/keys.json
 cd source && python3 -m http.server 8080      # serve the PWA
 ```
 
 Open it from a secure context (localhost, `adb reverse`, or HTTPS), click
-**Connect to scooter**, and pick the device. The writable/read-only datapoints
-from `keys.json` appear as tiles; flip the **Enable sending commands** switch to
-turn the writable ones into live controls (each send asks for confirmation).
-Without `keys.json` you can still enter `local_key`, `device_id` and `uuid` in
-Settings, watch the datapoints the scooter reports, and use the manual datapoint
-sender.
+**Connect to scooter**, and pick the device. Enter `local_key`, `device_id` and
+`uuid` in Settings — or use **Load JSON config** there to import a Tuya device
+JSON (or the `keys.json` produced by `tools/fetch_keys.py`). If that file also
+contains the datapoint `functions`/`status` spec, the writable/read-only tiles
+are built from it. Flip **Enable sending commands** to turn the writable
+datapoints into live controls (each send asks for confirmation).
+
+Credentials and the spec are imported deliberately through the UI; the app no
+longer fetches anything from the server on its own.
 
 ## Screens
 
@@ -41,7 +43,9 @@ The UI has two tabs:
   shown as cards. An optional **speed announcement** toggle speaks the current
   speed with the Web Speech API every *N* seconds (default 30) for at most *M*
   times (`0` = unlimited); the unit selector and the two numbers are remembered
-  per browser.
+  per browser. A **mode badge** (🚶 Walk / 🍃 Eco / 🛴 D / ⚡ S) shows the
+  current ride mode from the gear datapoint (dp 15; override the labels with a
+  `gear_modes` object in an imported config if they don't match your scooter).
 - **Debug** — the raw datapoint UI: the safety note, the auto-generated
   spec-driven controls, the manual datapoint sender and the diagnostics log.
 
