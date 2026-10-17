@@ -578,6 +578,17 @@
       case CODE.PAIR:
         break;
 
+      case CODE.DPS_V4:
+        // v4 write acknowledgement: the scooter echoes the datapoint(s) back
+        // (e.g. "0f 04 00 01 02" = dp 15, ENUM, value 2). Surface it as a live
+        // datapoint so the UI/read-back reflects what the scooter accepted.
+        for (const dp of parseKlv(data, 2, 0)) {
+          const tn = Object.keys(DT).find(k => DT[k] === dp.type) || dp.type;
+          this.log("ack dp " + dp.id + " (" + tn + ") = " + dp.value);
+          this.onDp(dp);
+        }
+        break;
+
       case CODE.RECV_DP:
         // v3 report: [id,type,len(1),value]...
         for (const dp of parseKlv(data, 1, 0)) this.onDp(dp);

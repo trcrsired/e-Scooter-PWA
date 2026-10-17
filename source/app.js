@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.11";
+const APP_VERSION = "0.7.12";
 
 // -------------------------
 // 1. Localization dictionary
@@ -835,6 +835,9 @@ function requestSend(dpId, dt, rawValue, displayText, revert) {
     try {
       tuya.sendDp(dpId, dt, rawValue);
       toast(t.sent);
+      // Ask the scooter to re-report shortly after, so the log/UI shows the
+      // value it actually settled on.
+      setTimeout(() => { if (tuya) tuya.requestStatus(); }, 600);
     } catch (e) {
       log("send failed: " + (e && e.message ? e.message : e));
       toast("send failed: " + (e && e.message ? e.message : e));
