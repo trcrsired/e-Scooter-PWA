@@ -161,6 +161,18 @@ main {
 .status.is-error .dot { background: var(--danger); }
 @keyframes pulse { 50% { opacity: 0.35; } }
 
+/* offline "last seen" note shown when not connected */
+.last-seen {
+  margin: -6px 0 14px;
+  padding: 9px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--card-2);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.last-seen[hidden] { display: none; }
+
 /* ---------------- buttons ---------------- */
 button { font-family: inherit; }
 

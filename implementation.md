@@ -11,6 +11,9 @@ A GPLv3 free-software PWA for a Tuya BLE e-scooter. For the project overview see
   - `app.js` — UI, credential storage, CBC wrapper over the wasm crypto, and
     auto-generated controls from an imported datapoint spec.
   - `tuya_crypto.wasm` — MD5 + AES-128 (ECB primitive; CBC is built in JS).
+  - `offline_state.js` — a tiny, dependency-free IndexedDB key/value store
+    (`SimpleKVStore`, same minimal pattern as the pwa-player project) used to
+    remember the last state each scooter reported.
   - `sw.js` — service worker (offline cache). **Bump `SW_VERSION` at the top
     every time this file changes**; a new version string invalidates the old
     cache so the installed PWA updates.
@@ -110,6 +113,18 @@ The main area has two tabs:
   downloads a JSON backup of every scooter profile (credentials, name filter,
   speed limits) plus the app settings (language, unit, speed warning, voice,
   announcement timings, arm state); importing that file restores both.
+
+## Offline last-seen state
+
+The scooter does **not** push its datapoints on its own, so on connect the app
+now asks it for the full state (`requestStatus`, twice) — otherwise the
+headlight / lock / gear controls would sit at “unknown” until the rider queried
+manually. After every report the app debounces a snapshot of all known
+datapoints to **IndexedDB** (`offline_state.js`, keyed per scooter profile).
+When the app is not connected — on load, after a disconnect, or when you switch
+profiles — it rebuilds the controls and fills them from that snapshot instead,
+showing an “Offline — last seen …” note with the time the state was recorded.
+The Debug **Dump datapoints (JSON)** export includes that timestamp too.
 
 ## Safety
 

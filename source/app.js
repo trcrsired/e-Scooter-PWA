@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.20";
+const APP_VERSION = "0.7.21";
 
 // -------------------------
 // 1. Localization dictionary
@@ -31,6 +31,7 @@ const i18n = {
     uuid_label: "Device UUID",
     save: "Save",
     saved: "Saved",
+    last_seen: when => `Offline \u2014 showing the last state seen ${when}`,
     sent: "Sent to scooter",
     missing: "Fill in local key, device ID and UUID",
     wasm_ok: "crypto module loaded",
@@ -188,6 +189,7 @@ const i18n = {
     uuid_label: "设备 UUID",
     save: "保存",
     saved: "已保存",
+    last_seen: when => `离线 \u2014 显示上次连接时的状态（${when}）`,
     sent: "已发送到滑板车",
     missing: "请填写本地密钥、设备 ID 与 UUID",
     wasm_ok: "加密模块已加载",
@@ -684,7 +686,7 @@ function selectDevice(i) {
   if (dev.functions || dev.status) {
     deviceSpec = { functions: dev.functions || [], status: dev.status || [], name: deviceLabel(dev, i) };
   }
-  buildControls(deviceSpec);
+  showDeviceState(dev);
 }
 
 // Edit the active scooter's fields and persist.
@@ -970,6 +972,7 @@ function buildDpDump() {
     app: "e-Scooter-PWA",
     version: APP_VERSION,
     connected: !!tuya,
+    last_seen: lastSeenAt || lastDpAt || null,
     scooter: {
       name: dev.device_name || "",
       device_id: dev.device_id || "",
@@ -1015,6 +1018,98 @@ function applySettings(s) {
     localStorage.setItem(LS_VOICE, s.voice);
     populateVoices();
   }
+}
+
+// ---- offline "last-seen" state (persisted in IndexedDB via offline_state.js) ----
+// While we are connected we keep saving the last datapoints the scooter
+// reported. When we are not connected we show that stored snapshot instead, so
+// the rider can still review the scooter's last known state.
+let lastSeenAt = null; // ISO time of the snapshot currently on screen
+let lastDpAt = null;   // ISO time of the last datapoint actually received
+let _stateSaveTimer = null;
+
+function stateKeyFor(dev) {
+  if (!dev) return "";
+  return dev.device_id || dev.uuid || dev.device_name || "";
+}
+
+function scheduleLastSeenSave() {
+  clearTimeout(_stateSaveTimer);
+  _stateSaveTimer = setTimeout(saveLastSeenNow, 1500);
+}
+
+function saveLastSeenNow() {
+  const dev = importedDevices[activeIndex];
+  const key = stateKeyFor(dev);
+  if (!key || !lastDp.size) return;
+  const dps = {};
+  for (const [id, v] of lastDp) dps[id] = v;
+  lastSeen_set(key, { at: lastDpAt || new Date().toISOString(), name: (dev && dev.device_name) || "", dps: dps });
+}
+
+function formatSeen(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " +
+    p(d.getHours()) + ":" + p(d.getMinutes());
+}
+
+function renderLastSeenNote() {
+  const el = $("lastSeenNote");
+  if (!el) return;
+  if (tuya || !lastSeenAt) { el.hidden = true; el.textContent = ""; return; }
+  el.hidden = false;
+  el.textContent = t.last_seen(formatSeen(lastSeenAt));
+}
+
+// Push the values currently in lastDp back into the freshly-built controls, so
+// the tiles/read-outs reflect the stored snapshot after a rebuild.
+function refillFromLastDp() {
+  const ids = [...lastDp.keys()].sort((a, b) => a - b);
+  for (const id of ids) {
+    const v = lastDp.get(id);
+    observed.add(id);
+    addObservedTile(id);
+    const handlers = dpUi.get(id);
+    if (handlers) for (const fn of handlers) fn(v);
+    updateRideCard(id, v);
+    updateGear(id, v, undefined);
+    updateLock(id, v, undefined);
+    updateHeadlight(id, v, undefined);
+  }
+}
+
+// Reset the on-screen state and, while offline, fill it from the stored snapshot.
+function showDeviceState(dev) {
+  lastSeenAt = null;
+  lastDp.clear();
+  observed.clear();
+  currentGear = null;
+  currentLock = null;
+  currentLight = null;
+  buildControls(deviceSpec);
+  buildRideCards();
+  buildModeButtons();
+  renderLock();
+  renderLight();
+  renderLastSeenNote();
+  if (tuya) return;
+
+  const key = stateKeyFor(dev);
+  if (!key) return;
+  Promise.resolve(lastSeen_get(key)).then(rec => {
+    // Bail if we connected or switched scooter while the read was in flight.
+    if (tuya || stateKeyFor(importedDevices[activeIndex]) !== key) return;
+    if (!rec || !rec.dps) return;
+    lastSeenAt = rec.at || null;
+    const ids = Object.keys(rec.dps).map(Number);
+    for (const id of ids) lastDp.set(id, rec.dps[id]);
+    refillFromLastDp();
+    renderLastSeenNote();
+    log("restored last-seen state (" + ids.length + " dp) from " + formatSeen(lastSeenAt));
+  });
 }
 
 // Restore the saved scooter list from this browser.
@@ -1495,6 +1590,8 @@ function buildControls(spec) {
 function onDp(dp) {
   lastDp.set(dp.id, dp.value);
   observed.add(dp.id);
+  lastDpAt = new Date().toISOString();
+  scheduleLastSeenSave();
   log("← dp " + dp.id + " (" + (DT_NAMES[dp.type] || dp.type) + ") = " +
     (dp.value instanceof Uint8Array ? hex(dp.value) : dp.value));
   const handlers = dpUi.get(dp.id);
@@ -1830,7 +1927,7 @@ function isNight() {
 // When we first learn the headlight state and it is night with the light off,
 // gently suggest turning it on (once per session). Called on the first dp-8 report.
 function maybeSuggestHeadlight() {
-  if (nightSuggested || !isNight() || currentLight !== false) return;
+  if (!tuya || nightSuggested || !isNight() || currentLight !== false) return;
   nightSuggested = true;
   log("night reminder: it is dark and the headlight is off — suggesting turning it on");
   toast("🌙 " + t.light_night_hint);
@@ -2134,6 +2231,10 @@ connectBtn.onclick = async () => {
     setConnected(false);
     setStatus(t.status_disconnected, "");
     buildControls(deviceSpec);
+    refillFromLastDp();
+    saveLastSeenNow();
+    lastSeenAt = lastDpAt || lastSeenAt;
+    renderLastSeenNote();
     return;
   }
 
@@ -2170,6 +2271,13 @@ connectBtn.onclick = async () => {
         buildControls(deviceSpec); // enable the arm-switch / manual sender now we're connected
         headlightSeen = false;     // re-check the headlight on the first dp-8 report of this session
         nightSuggested = false;
+        renderLastSeenNote();      // we're live now — hide the offline snapshot note
+        // The scooter does not push its datapoints on its own, so ask for the
+        // full state once we're up; otherwise controls (headlight, lock, gear…)
+        // would stay "unknown" until the rider queries manually.
+        log("requesting scooter state after connect");
+        setTimeout(() => { if (tuya) tuya.requestStatus(); }, 400);
+        setTimeout(() => { if (tuya) tuya.requestStatus(); }, 1100);
         maybeOfferNameFilter(device.name).catch(() => {});
       },
     });
@@ -2180,6 +2288,10 @@ connectBtn.onclick = async () => {
       setConnected(false);
       tuya = null;
       buildControls(deviceSpec);
+      refillFromLastDp();          // keep showing the values we last received
+      saveLastSeenNow();
+      lastSeenAt = lastDpAt || lastSeenAt;
+      renderLastSeenNote();
     });
 
     setStatus(t.status_connGatt, "is-busy");
@@ -2226,14 +2338,9 @@ $("copyLogBtn").onclick = async () => {
 (async function boot() {
   log("app v" + APP_VERSION);
   const ok = await Crypto.load();
-  restoreDevices();
-  buildControls(deviceSpec);
-  buildRideCards();
-  buildModeButtons();
+  restoreDevices(); // builds the controls and, when offline, restores the last-seen state
   setUnit(unit);
   populateVoices();
-  renderLock();
-  renderLight();
   if (!ok) log("(connect is disabled until the crypto module loads)");
   log("secure context: " + window.isSecureContext);
   if (!("bluetooth" in navigator)) {

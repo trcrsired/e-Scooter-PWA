@@ -29,6 +29,9 @@ scooter's datapoints.
   diagnostics log.
 - **Multiple scooters** — keep a list of profiles and switch between them in the
   UI; each profile can filter the Bluetooth chooser by device-name prefix.
+- **Offline last-seen state** — the last values each scooter reported are kept in
+  the browser (IndexedDB), so when you are not connected the dashboard still
+  shows them, labelled with the time they were last seen.
 - **Backup** — export every scooter (credentials, name filter, speed limits) plus
   your app settings to one JSON file, and import it back on another device.
 
