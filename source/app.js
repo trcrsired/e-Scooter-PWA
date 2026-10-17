@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.4.1";
+const APP_VERSION = "0.5.0";
 
 // -------------------------
 // 1. Localization dictionary
@@ -62,6 +62,29 @@ const i18n = {
     copied: "Copied",
     on: "On",
     off: "Off",
+    tab_ride: "Ride",
+    tab_debug: "Debug",
+    ride_scooter: "Scooter",
+    trip: "Trip",
+    max: "Max",
+    avg: "Avg",
+    time: "Time",
+    gps_start: "Start tracking",
+    gps_stop: "Stop tracking",
+    gps_off: "GPS off",
+    gps_waiting: "Acquiring GPS…",
+    gps_tracking: "Tracking",
+    gps_error: "GPS error",
+    gps_unsupported: "Geolocation isn't available in this browser/context.",
+    announce_title: "Speed announcements",
+    every_s: "every (s)",
+    times: "times",
+    tts_off: "Voice off",
+    tts_on: (n, m) => `Voice on · ${n}s` + (m > 0 ? " × " + m : " · unlimited"),
+    tts_unavailable: "Speech synthesis unavailable",
+    batt: "Battery",
+    volt: "Voltage",
+    temp: "Temp",
   },
   zh: {
     title: "电动滑板车",
@@ -117,6 +140,29 @@ const i18n = {
     copied: "已复制",
     on: "开",
     off: "关",
+    tab_ride: "骑行",
+    tab_debug: "调试",
+    ride_scooter: "滑板车",
+    trip: "里程",
+    max: "最高",
+    avg: "平均",
+    time: "时间",
+    gps_start: "开始定位",
+    gps_stop: "停止定位",
+    gps_off: "定位未开启",
+    gps_waiting: "正在获取定位…",
+    gps_tracking: "定位中",
+    gps_error: "定位错误",
+    gps_unsupported: "此浏览器/环境不支持定位。",
+    announce_title: "语音播报",
+    every_s: "间隔（秒）",
+    times: "次数",
+    tts_off: "语音关闭",
+    tts_on: (n, m) => `语音开启 · ${n} 秒` + (m > 0 ? " × " + m : " · 不限次数"),
+    tts_unavailable: "此环境不支持语音合成",
+    batt: "电量",
+    volt: "电压",
+    temp: "温度",
   }
 };
 
@@ -162,6 +208,19 @@ $("confirmCancelBtn").textContent = t.confirm_cancel;
 $("confirmSendBtn").textContent = t.confirm_send;
 document.documentElement.lang = lang;
 $("version").textContent = "v" + APP_VERSION;
+$("tabRide").textContent = t.tab_ride;
+$("tabDebug").textContent = t.tab_debug;
+$("rideScooterTitle").textContent = t.ride_scooter;
+$("rideGpsState").textContent = t.gps_off;
+$("gpsBtn").textContent = t.gps_start;
+$("lblTrip").textContent = t.trip;
+$("lblMax").textContent = t.max;
+$("lblAvg").textContent = t.avg;
+$("lblTime").textContent = t.time;
+$("announceTitle").textContent = t.announce_title;
+$("lblEvery").textContent = t.every_s;
+$("lblTimes").textContent = t.times;
+$("ttsState").textContent = t.tts_off;
 
 // -------------------------
 // 4. Helpers
@@ -707,7 +766,211 @@ function onDp(dp) {
   const handlers = dpUi.get(dp.id);
   if (handlers) for (const fn of handlers) fn(dp.value);
   addObservedTile(dp.id);
+  updateRideCard(dp.id, dp.value);
 }
+
+// -------------------------
+// 8b. Ride view: GPS speed, units, scooter read-outs, voice
+// -------------------------
+const UNITS = {
+  kmh: { speed: 1, speedLabel: "km/h", dist: 0.001, distLabel: "km", distDec: 2 },
+  mph: { speed: 0.621371, speedLabel: "mph", dist: 0.000621371, distLabel: "mi", distDec: 2 },
+  ms: { speed: 0.277778, speedLabel: "m/s", dist: 1, distLabel: "m", distDec: 1 },
+};
+const LS_UNIT = "escooter.unit";
+let unit = localStorage.getItem(LS_UNIT) || "kmh";
+if (!UNITS[unit]) unit = "kmh";
+
+const unitBtns = { kmh: $("unitKmh"), mph: $("unitMph"), ms: $("unitMs") };
+function setUnit(u) {
+  if (!UNITS[u]) return;
+  unit = u;
+  localStorage.setItem(LS_UNIT, u);
+  for (const [k, b] of Object.entries(unitBtns)) b.classList.toggle("is-active", k === u);
+  $("rideSpeedUnit").textContent = UNITS[u].speedLabel;
+  $("rideMaxUnit").textContent = UNITS[u].speedLabel;
+  $("rideAvgUnit").textContent = UNITS[u].speedLabel;
+  $("rideTripUnit").textContent = UNITS[u].distLabel;
+  Geo.render();
+}
+for (const [u, b] of Object.entries(unitBtns)) b.onclick = () => setUnit(u);
+
+function haversine(a, b) {
+  const R = 6371000, rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
+  const h = Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function fmtTime(secs) {
+  const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+const Geo = {
+  watchId: null, running: false, lastPos: null, timer: null,
+  tripM: 0, maxKmh: 0, sumKmh: 0, samples: 0, startedAt: 0, speedKmh: 0,
+  start() {
+    if (!("geolocation" in navigator)) { log(t.gps_unsupported); return; }
+    this.tripM = 0; this.maxKmh = 0; this.sumKmh = 0; this.samples = 0;
+    this.speedKmh = 0; this.lastPos = null;
+    this.startedAt = Date.now(); this.running = true;
+    $("gpsBtn").textContent = t.gps_stop;
+    $("rideGpsState").textContent = t.gps_waiting;
+    this.timer = setInterval(() => this.render(), 1000);
+    this.watchId = navigator.geolocation.watchPosition(
+      (p) => this.onPos(p),
+      (e) => { log("gps error: " + (e && e.message)); $("rideGpsState").textContent = t.gps_error + (e && e.message ? ": " + e.message : ""); },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+    );
+    this.render();
+  },
+  stop() {
+    if (this.watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(this.watchId);
+    this.watchId = null; this.running = false;
+    clearInterval(this.timer); this.timer = null;
+    $("gpsBtn").textContent = t.gps_start;
+    $("rideGpsState").textContent = t.gps_off;
+    this.render();
+  },
+  onPos(pos) {
+    const c = pos.coords, tms = pos.timestamp || Date.now();
+    let inst = null;
+    if (this.lastPos) {
+      const dt = (tms - this.lastPos.t) / 1000;
+      if (dt > 0) {
+        const d = haversine(this.lastPos, { lat: c.latitude, lon: c.longitude });
+        if (dt <= 10 && d <= 300) {           // reject teleports / stale fixes
+          inst = (d / dt) * 3.6;
+          if (inst > 1.5) this.tripM += d;     // only accumulate while moving
+        }
+      }
+    }
+    // The device's own doppler speed is preferred when present.
+    if (c.speed != null && isFinite(c.speed) && c.speed >= 0) inst = c.speed * 3.6;
+    if (inst == null) inst = this.speedKmh;
+    this.speedKmh = this.speedKmh * 0.4 + inst * 0.6;  // EMA smoothing
+    if (this.speedKmh < 1) this.speedKmh = 0;
+    if (this.speedKmh > this.maxKmh) this.maxKmh = this.speedKmh;
+    if (this.speedKmh > 0) { this.sumKmh += this.speedKmh; this.samples++; }
+    this.lastPos = { lat: c.latitude, lon: c.longitude, t: tms };
+    $("rideGpsState").textContent = t.gps_tracking + (c.accuracy ? "  ±" + Math.round(c.accuracy) + " m" : "");
+    this.render();
+  },
+  render() {
+    const U = UNITS[unit];
+    $("rideSpeed").textContent = String(Math.round(this.speedKmh * U.speed));
+    $("rideTrip").textContent = (this.tripM * U.dist).toFixed(U.distDec);
+    $("rideMax").textContent = String(Math.round(this.maxKmh * U.speed));
+    $("rideAvg").textContent = this.samples ? String(Math.round((this.sumKmh / this.samples) * U.speed)) : "0";
+    $("rideTime").textContent = fmtTime(this.running ? (Date.now() - this.startedAt) / 1000 : 0);
+  },
+};
+$("gpsBtn").onclick = () => (Geo.running ? Geo.stop() : Geo.start());
+
+// Scooter read-outs on the Ride screen. dp ids are the ones this scooter
+// reports; scale is decoded from the value (voltage /100, temp /10). dp 3 is a
+// best guess for battery percentage until the DP spec confirms it.
+const RIDE_CARDS = [
+  { id: 3, label: () => t.batt, scale: 0, unit: "%" },
+  { id: 20, label: () => t.volt, scale: 2, unit: "V" },
+  { id: 18, label: () => t.temp, scale: 1, unit: "°C" },
+];
+const rideCards = new Map();
+function buildRideCards() {
+  const host = $("rideCards");
+  host.textContent = "";
+  rideCards.clear();
+  for (const c of RIDE_CARDS) {
+    const tile = document.createElement("div"); tile.className = "tile";
+    const lab = document.createElement("div"); lab.className = "tile-label"; lab.textContent = c.label();
+    const val = document.createElement("div"); val.className = "tile-value"; val.textContent = "–";
+    tile.appendChild(lab); tile.appendChild(val);
+    host.appendChild(tile);
+    rideCards.set(c.id, { el: val, scale: c.scale, unit: c.unit });
+  }
+}
+function updateRideCard(id, v) {
+  const e = rideCards.get(id);
+  if (!e || typeof v !== "number") return;
+  const num = v / Math.pow(10, e.scale);
+  e.el.textContent = (e.scale ? num.toFixed(e.scale) : num) + (e.unit ? " " + e.unit : "");
+}
+
+// ---- voice speed announcements (Web Speech API) ----
+const LS_TTS = "escooter.tts";
+const ttsToggle = $("ttsToggle"), ttsEvery = $("ttsEvery"), ttsMax = $("ttsMax");
+try {
+  const s = JSON.parse(localStorage.getItem(LS_TTS) || "{}");
+  if (s.every) ttsEvery.value = s.every;
+  if (s.max !== undefined) ttsMax.value = s.max;
+} catch (_) {}
+function saveTts() {
+  localStorage.setItem(LS_TTS, JSON.stringify({
+    every: Math.max(5, Number(ttsEvery.value) || 30),
+    max: Math.max(0, Number(ttsMax.value) || 0),
+  }));
+}
+ttsEvery.addEventListener("change", saveTts);
+ttsMax.addEventListener("change", saveTts);
+
+const Announce = {
+  on: false, count: 0, timer: null,
+  start() {
+    if (!("speechSynthesis" in window)) { log(t.tts_unavailable); ttsToggle.checked = false; updateTtsState(); return; }
+    this.on = true; this.count = 0;
+    this.tick();
+  },
+  tick() {
+    if (!this.on) return;
+    const max = Math.max(0, Number(ttsMax.value) || 0);
+    if (max > 0 && this.count >= max) { this.stop(false); return; }
+    this.speak();
+    const every = Math.max(5, Number(ttsEvery.value) || 30);
+    this.timer = setTimeout(() => this.tick(), every * 1000);
+    updateTtsState();
+  },
+  speak() {
+    this.count++;
+    const U = UNITS[unit];
+    const v = Math.round(Geo.speedKmh * U.speed);
+    const text = lang === "zh" ? `当前速度 ${v} ${U.speedLabel}` : `Current speed ${v} ${U.speedLabel}`;
+    log("tts " + this.count + ": " + text);
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    } catch (e) { log("tts error: " + e.message); }
+  },
+  stop(flipToggle) {
+    this.on = false;
+    clearTimeout(this.timer); this.timer = null;
+    if (flipToggle !== false) ttsToggle.checked = false;
+    updateTtsState();
+  },
+};
+function updateTtsState() {
+  if (!Announce.on) { $("ttsState").textContent = t.tts_off; return; }
+  const every = Math.max(5, Number(ttsEvery.value) || 30);
+  const max = Math.max(0, Number(ttsMax.value) || 0);
+  $("ttsState").textContent = t.tts_on(every, max) + " · " + Announce.count + (max > 0 ? "/" + max : "");
+}
+ttsToggle.addEventListener("change", () => {
+  if (ttsToggle.checked) Announce.start(); else Announce.stop(false);
+  saveTts();
+});
+
+// -------------------------
+// 8c. View switching
+// -------------------------
+function showView(name) {
+  const ride = name === "ride";
+  $("view-ride").hidden = !ride;
+  $("view-debug").hidden = ride;
+  $("tabRide").classList.toggle("is-active", ride);
+  $("tabDebug").classList.toggle("is-active", !ride);
+}
+$("tabRide").onclick = () => showView("ride");
+$("tabDebug").onclick = () => showView("debug");
 
 // -------------------------
 // 9. BLE session
@@ -852,6 +1115,8 @@ $("copyLogBtn").onclick = async () => {
     log(t.keys_none);
     buildControls(null);
   }
+  buildRideCards();
+  setUnit(unit);
   if (!ok) log("(connect is disabled until the crypto module loads)");
   log("secure context: " + window.isSecureContext);
   if (!("bluetooth" in navigator)) {

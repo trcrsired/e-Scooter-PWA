@@ -36,10 +36,62 @@
 
     <button id="connectBtn" class="primary"></button>
 
-    <div id="safetyNote" class="notice"></div>
+    <!-- ---------------- Ride (normal) ---------------- -->
+    <section id="view-ride" class="view">
+      <div class="unit-seg" id="unitSeg" role="group" aria-label="Speed unit">
+        <button id="unitKmh" class="seg-btn is-active" data-unit="kmh">km/h</button>
+        <button id="unitMph" class="seg-btn" data-unit="mph">mph</button>
+        <button id="unitMs" class="seg-btn" data-unit="ms">m/s</button>
+      </div>
 
-    <div id="controls"></div>
+      <div class="speed-hero">
+        <div class="speed-value"><span id="rideSpeed">0</span><span class="speed-unit" id="rideSpeedUnit">km/h</span></div>
+        <div class="speed-state" id="rideGpsState"></div>
+      </div>
+
+      <div class="ride-stats">
+        <div class="stat"><div class="stat-label" id="lblTrip"></div><div class="stat-value"><span id="rideTrip">0.00</span><span class="stat-unit" id="rideTripUnit">km</span></div></div>
+        <div class="stat"><div class="stat-label" id="lblMax"></div><div class="stat-value"><span id="rideMax">0</span><span class="stat-unit" id="rideMaxUnit">km/h</span></div></div>
+        <div class="stat"><div class="stat-label" id="lblAvg"></div><div class="stat-value"><span id="rideAvg">0</span><span class="stat-unit" id="rideAvgUnit">km/h</span></div></div>
+        <div class="stat"><div class="stat-label" id="lblTime"></div><div class="stat-value"><span id="rideTime">0:00</span></div></div>
+      </div>
+
+      <button id="gpsBtn" class="primary"></button>
+
+      <section class="section">
+        <h2 id="announceTitle"></h2>
+        <div class="announce-row">
+          <label class="switch"><input id="ttsToggle" type="checkbox"><span class="slider"></span></label>
+          <label class="announce-field" for="ttsEvery"><span id="lblEvery"></span><input id="ttsEvery" type="number" min="5" step="5" value="30"></label>
+          <label class="announce-field" for="ttsMax"><span id="lblTimes"></span><input id="ttsMax" type="number" min="0" step="1" value="10"></label>
+        </div>
+        <div class="tile-meta" id="ttsState"></div>
+      </section>
+
+      <section class="section">
+        <h2 id="rideScooterTitle"></h2>
+        <div class="tiles" id="rideCards"></div>
+      </section>
+    </section>
+
+    <!-- ---------------- Debug ---------------- -->
+    <section id="view-debug" class="view" hidden>
+      <div id="safetyNote" class="notice"></div>
+      <div id="controls"></div>
+
+      <details class="log-wrap">
+        <summary id="diagSummary">Diagnostics</summary>
+        <button id="copyLogBtn" class="ghost"></button>
+        <button id="clearLogBtn" class="ghost"></button>
+        <pre id="log" class="log"></pre>
+      </details>
+    </section>
   </main>
+
+  <nav class="tabbar">
+    <button id="tabRide" class="tab is-active"></button>
+    <button id="tabDebug" class="tab"></button>
+  </nav>
 
   <div id="confirmOverlay" class="overlay" hidden>
     <div class="sheet confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
@@ -84,13 +136,6 @@
       </div>
     </div>
   </div>
-
-  <details class="log-wrap">
-    <summary id="diagSummary">Diagnostics</summary>
-    <button id="copyLogBtn" class="ghost"></button>
-    <button id="clearLogBtn" class="ghost"></button>
-    <pre id="log" class="log"></pre>
-  </details>
 
   <script src="tuya_ble.js"></script>
   <script src="app.js"></script>

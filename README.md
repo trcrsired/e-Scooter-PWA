@@ -29,6 +29,22 @@ Without `keys.json` you can still enter `local_key`, `device_id` and `uuid` in
 Settings, watch the datapoints the scooter reports, and use the manual datapoint
 sender.
 
+## Screens
+
+The UI has two tabs:
+
+- **Ride** — a speed dashboard. A big hero shows your *GPS* speed (from the
+  browser's `navigator.geolocation`, Haversine distance + device doppler speed,
+  exponentially smoothed) with trip / max / average / elapsed time. Pick the
+  display unit (**km/h**, **mph** or **m/s**). Tracking is manual: press
+  **Start tracking**. The scooter's own read-outs (battery, voltage, temp) are
+  shown as cards. An optional **speed announcement** toggle speaks the current
+  speed with the Web Speech API every *N* seconds (default 30) for at most *M*
+  times (`0` = unlimited); the unit selector and the two numbers are remembered
+  per browser.
+- **Debug** — the raw datapoint UI: the safety note, the auto-generated
+  spec-driven controls, the manual datapoint sender and the diagnostics log.
+
 ## Safety
 
 Commands are sent to the scooter only after you arm the switch **and** confirm

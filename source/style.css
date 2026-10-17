@@ -474,3 +474,87 @@ select { cursor: pointer; }
   text-align: center;
   color: var(--muted);
 }
+
+/* ---------------- bottom tab bar ---------------- */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px calc(env(safe-area-inset-bottom) + 8px);
+  background: var(--appbar);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+}
+.tab {
+  flex: 1 1 0;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tab.is-active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+.view[hidden] { display: none; }
+
+/* ---------------- ride: speed hero ---------------- */
+.unit-seg { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 10px; }
+.seg-btn {
+  min-height: 34px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card-2);
+  color: var(--fg);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.seg-btn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 650;
+}
+
+.speed-hero {
+  text-align: center;
+  padding: 18px 14px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+.speed-value { display: flex; align-items: baseline; justify-content: center; gap: 8px; line-height: 1; }
+.speed-value #rideSpeed {
+  font-size: 4.6rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.speed-unit { font-size: 1.1rem; color: var(--muted); font-weight: 600; }
+.speed-state { margin-top: 6px; font-size: 0.78rem; color: var(--muted); min-height: 1em; }
+
+.ride-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.stat {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.stat .stat-label { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.stat .stat-value { font-size: 1.05rem; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.stat .stat-unit { font-size: 0.66rem; color: var(--muted); margin-left: 3px; font-weight: 500; }
+
+/* voice-announce controls */
+.announce-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.announce-field { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--muted); }
+.announce-field input { width: 76px; min-height: 40px; }
