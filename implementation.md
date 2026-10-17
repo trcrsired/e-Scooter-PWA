@@ -106,6 +106,9 @@ The main area has two tabs:
   triggers an extra safety warning confirmation** (a high maximum can make the
   scooter dangerously fast), and sending goes through the usual confirmation
   gate; only the values that changed are written.
+- **Start mode** — how the scooter pulls away from a standstill (dp 16, an
+  ENUM): `0` = start directly on the throttle, `1` = run/push to start. Shown as
+  a selector, written through the usual confirmation + read-back verification.
 - **Credential** — importing your scooter's JSON from the Tuya IoT platform is
   the preferred way (there is a short step-by-step guide and a link to
   <https://iot.tuya.com/> right there). Manual `local_key` / `device_id` /

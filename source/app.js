@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.21";
+const APP_VERSION = "0.7.22";
 
 // -------------------------
 // 1. Localization dictionary
@@ -158,6 +158,13 @@ const i18n = {
     range_warn_body: "You are changing the allowed speed range of a riding mode. Setting a high maximum can make the scooter go dangerously fast — beyond what it can safely brake or handle. Only change this if you know your scooter's limits. Continue?",
     range_warn_ok: "I understand \u2014 change it",
     range_warn_cancel: "Keep current range",
+    start_title: "Start mode",
+    start_label: "How the scooter starts from a standstill (dp 16)",
+    start_direct: "Start directly (throttle)",
+    start_run: "Run/push to start",
+    start_sent: "Start mode sent",
+    start_applied: v => `Start mode confirmed: ${v}`,
+    start_rejected: v => `Start mode not applied (still ${v})`,
     speed_save: "Send speed limits",
     speed_sent: "Speed limits sent",
     speed_saved: "Speed limits saved",
@@ -316,6 +323,13 @@ const i18n = {
     range_warn_body: "你正在更改某个骑行模式的允许速度范围。设置过高的上限会使滑板车达到危险的高速，超出其安全制动与操控能力。仅当你了解自己滑板车的限速时才更改。是否继续？",
     range_warn_ok: "我了解 —— 仍然更改",
     range_warn_cancel: "保留当前范围",
+    start_title: "启动方式",
+    start_label: "滑板车从静止起步的方式（dp 16）",
+    start_direct: "直接启动（拧油门）",
+    start_run: "助跑/推行后启动",
+    start_sent: "启动方式已发送",
+    start_applied: v => `启动方式已确认：${v}`,
+    start_rejected: v => `启动方式未生效（仍为 ${v}）`,
     speed_save: "发送速度限制",
     speed_sent: "速度限制已发送",
     speed_saved: "速度限制已保存",
@@ -378,6 +392,13 @@ function applyStatic() {
   $("speedSaveBtn").textContent = t.speed_save;
   document.querySelectorAll(".speed-min-lbl").forEach(e => { e.textContent = t.range_min; });
   document.querySelectorAll(".speed-max-lbl").forEach(e => { e.textContent = t.range_max; });
+  $("startTitle").textContent = t.start_title;
+  $("startLabel").textContent = t.start_label;
+  const startSel = $("startSelect");
+  if (startSel && startSel.options.length >= 2) {
+    startSel.options[0].textContent = t.start_direct;
+    startSel.options[1].textContent = t.start_run;
+  }
   $("credTitle").textContent = t.credential_title;
   $("credHintText").textContent = t.cred_hint;
   $("credHelpSummary").textContent = t.cred_help;
@@ -1078,6 +1099,7 @@ function refillFromLastDp() {
     updateGear(id, v, undefined);
     updateLock(id, v, undefined);
     updateHeadlight(id, v, undefined);
+    updateStartMode(id, v, undefined);
   }
 }
 
@@ -1601,6 +1623,7 @@ function onDp(dp) {
   updateGear(dp.id, dp.value, dp.type);
   updateLock(dp.id, dp.value, dp.type);
   updateHeadlight(dp.id, dp.value, dp.type);
+  updateStartMode(dp.id, dp.value, dp.type);
 }
 
 // -------------------------
@@ -1968,6 +1991,56 @@ function updateHeadlight(id, v, type) {
   }
 }
 $("lightBtn").addEventListener("click", onLightClick);
+
+// ---- start mode (dp 16) ----
+// ENUM: 0 = start directly (throttle from standstill), 1 = run/push to start.
+// A configuration-style control, so it lives in Settings; reads/writes go
+// through the same confirmation + read-back verification as the other controls.
+const START_MODE_DP = 16;
+let startModeType = null;
+let currentStartMode = null;
+let startModeExpect = null;
+
+function startModeLabel(v) {
+  return Number(v) === 1 ? t.start_run : t.start_direct;
+}
+
+function renderStartMode() {
+  const sel = $("startSelect");
+  if (!sel) return;
+  if (currentStartMode === null) { sel.value = ""; return; }
+  sel.value = String(currentStartMode);
+}
+
+function onStartModeChange() {
+  if (!tuya) { toast(t.status_disconnected); renderStartMode(); return; }
+  if (!armed) { toast(t.arm_needed); renderStartMode(); return; }
+  const sel = $("startSelect");
+  const want = Number(sel.value);
+  requestSend(START_MODE_DP, startModeType || DT.ENUM, want, startModeLabel(want), () => renderStartMode(),
+    () => { startModeExpect = { value: want, at: Date.now() }; });
+  $("startStatus").textContent = t.start_sent;
+  setTimeout(() => { $("startStatus").textContent = ""; }, 2500);
+}
+$("startSelect").addEventListener("change", onStartModeChange);
+
+function updateStartMode(id, v, type) {
+  if (id !== START_MODE_DP) return;
+  if (type != null) startModeType = type;
+  if (v == null) return;
+  currentStartMode = Number(v);
+  renderStartMode();
+  if (startModeExpect && Date.now() - startModeExpect.at < 8000) {
+    const want = startModeExpect.value;
+    startModeExpect = null;
+    const ok = currentStartMode === want;
+    log(ok
+      ? "start mode read-back: dp 16 = " + currentStartMode + " — scooter applied it"
+      : "start mode read-back: dp 16 = " + currentStartMode + " (asked for " + want + ") — scooter did NOT apply it");
+    toast(ok ? t.start_applied(startModeLabel(currentStartMode))
+      : t.start_rejected(startModeLabel(currentStartMode)));
+  }
+}
 
 // ---- voice speed announcements (Web Speech API) ----
 const LS_TTS = "escooter.tts";
