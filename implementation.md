@@ -67,8 +67,12 @@ The main area has two tabs:
   button (re-asks the scooter to report every datapoint, so you can see whether
   a write was accepted) and the diagnostics log (every line is prefixed with an
   ISO 8601 timestamp, e.g. `2026-10-17T20:31:05.123Z`). A v4 DP write is
-  acknowledged by the scooter with a `0x27` echo, which the app parses back into
-  a `ack dp …` report, and it re-queries the scooter shortly after every send.
+  acknowledged by the scooter with a `0x27` echo, which the app logs as an
+  `ack dp …` line. That echo only means the frame was received — it is *not*
+  proof the scooter acted on it, so it is deliberately kept out of the live
+  datapoint state. After a gear write the app re-queries the scooter and
+  compares the real `dp 15` read-back against what it asked for, logging (and
+  toasting) whether the scooter actually switched.
 
 **Settings** (the ⚙ button) is a full-screen view with sections:
 - **Language** — interface language (English / 中文) and which speech voice the

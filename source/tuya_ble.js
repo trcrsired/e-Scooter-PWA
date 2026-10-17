@@ -217,6 +217,7 @@
     this.crypto = crypto || {};
     this.onLog = (handlers && handlers.onLog) || function () {};
     this.onDp = (handlers && handlers.onDp) || function () {};
+    this.onAck = (handlers && handlers.onAck) || function () {};
     this.onReady = (handlers && handlers.onReady) || function () {};
 
     this.device = null;
@@ -580,12 +581,17 @@
 
       case CODE.DPS_V4:
         // v4 write acknowledgement: the scooter echoes the datapoint(s) back
-        // (e.g. "0f 04 00 01 02" = dp 15, ENUM, value 2). Surface it as a live
-        // datapoint so the UI/read-back reflects what the scooter accepted.
+        // (e.g. "0f 04 00 01 02 01" = dp 15, ENUM, value 2). This only proves
+        // the frame was received — it is NOT proof the scooter acted on it.
+        // Feeding it into onDp made the gear selector show the requested mode
+        // even when the scooter ignored the write, so it is reported to onAck
+        // (logging only) instead of updating the live datapoint state.
+        this.log("ack raw: " + hex(data));
         for (const dp of parseKlv(data, 2, 0)) {
           const tn = Object.keys(DT).find(k => DT[k] === dp.type) || dp.type;
-          this.log("ack dp " + dp.id + " (" + tn + ") = " + dp.value);
-          this.onDp(dp);
+          this.log("ack dp " + dp.id + " (" + tn + ") = " + dp.value +
+            " (echo — not a confirmed state change)");
+          this.onAck(dp);
         }
         break;
 

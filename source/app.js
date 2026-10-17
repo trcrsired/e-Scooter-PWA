@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.12";
+const APP_VERSION = "0.7.13";
 
 // -------------------------
 // 1. Localization dictionary
@@ -91,6 +91,8 @@ const i18n = {
     mode_s: "S",
     mode_unknown: v => `Mode ${v}`,
     arm_needed: "Turn on \u201cEnable sending commands\u201d in Debug to change the mode.",
+    gear_applied: v => `Scooter confirmed ${v}`,
+    gear_rejected: v => `Scooter did not switch (still ${v})`,
     credential_title: "Credential",
     lang_title: "Language",
     lang_label: "Interface language",
@@ -204,6 +206,8 @@ const i18n = {
     mode_s: "运动",
     mode_unknown: v => `模式 ${v}`,
     arm_needed: "请先在调试页开启“启用发送命令”后再切换模式。",
+    gear_applied: v => `滑板车已确认切换到 ${v}`,
+    gear_rejected: v => `滑板车未切换（仍为 ${v}）`,
     credential_title: "凭据",
     lang_title: "语言",
     lang_label: "界面语言",
@@ -826,7 +830,7 @@ confirmOverlay.addEventListener("click", e => { if (e.target === confirmOverlay)
 // The ONLY function that writes to the scooter. It requires the arm-switch to
 // be on (tuya.allowWrites), shows a confirmation, and reverts the control if
 // the user declines.
-function requestSend(dpId, dt, rawValue, displayText, revert) {
+function requestSend(dpId, dt, rawValue, displayText, revert, onSent) {
   if (!tuya) { toast(t.status_disconnected); return; }
   if (!armed) { toast(t.arm_needed); return; }
   askConfirm("dp " + dpId, displayText).then(ok => {
@@ -834,9 +838,10 @@ function requestSend(dpId, dt, rawValue, displayText, revert) {
     log("→ dp " + dpId + " (" + (DT_NAMES[dt] || dt) + ") = " + (rawValue instanceof Uint8Array ? hex(rawValue) : rawValue));
     try {
       tuya.sendDp(dpId, dt, rawValue);
+      if (onSent) onSent();
       toast(t.sent);
       // Ask the scooter to re-report shortly after, so the log/UI shows the
-      // value it actually settled on.
+      // value it actually settled on (not just the echo we wrote).
       setTimeout(() => { if (tuya) tuya.requestStatus(); }, 600);
     } catch (e) {
       log("send failed: " + (e && e.message ? e.message : e));
@@ -1332,6 +1337,14 @@ const GEAR_ALIASES = {
   "3": "s", s: "s", sport: "s", turbo: "s",
 };
 let currentGear = null;
+// Set right after a gear write; the next real dp-15 read-back is compared
+// against it to tell the user whether the scooter actually switched.
+let gearExpect = null;
+
+function gearLabel(v) {
+  const key = GEAR_ALIASES[String(v).toLowerCase()] || GEAR_ALIASES[String(Number(v))];
+  return key ? MODE_ICONS[key] + " " + MODE_LABELS[key]() : t.mode_unknown(v);
+}
 
 function buildModeButtons() {
   for (const b of MODE_BTNS) {
@@ -1351,7 +1364,8 @@ function buildModeButtons() {
 function onModeClick(b) {
   if (!tuya) { toast(t.status_disconnected); return; }
   if (!armed) { toast(t.arm_needed); return; }
-  requestSend(GEAR_DP, gearType || DT.ENUM, b.value, MODE_ICONS[b.key] + " " + MODE_LABELS[b.key](), null);
+  requestSend(GEAR_DP, gearType || DT.ENUM, b.value, MODE_ICONS[b.key] + " " + MODE_LABELS[b.key](), null,
+    () => { gearExpect = { value: b.value, at: Date.now() }; });
 }
 function updateGear(id, v, type) {
   if (id !== GEAR_DP) return;
@@ -1360,6 +1374,16 @@ function updateGear(id, v, type) {
   const vk = String(v).toLowerCase();
   currentGear = GEAR_ALIASES[vk] || GEAR_ALIASES[String(Number(v))] || null;
   for (const b of MODE_BTNS) $(b.id).classList.toggle("is-active", b.key === currentGear);
+  // Verify against the write we just issued (only real reports reach here).
+  if (gearExpect && Date.now() - gearExpect.at < 8000) {
+    const want = gearExpect.value;
+    gearExpect = null;
+    const ok = Number(v) === Number(want);
+    log(ok
+      ? "gear read-back: dp 15 = " + v + " — scooter applied the change"
+      : "gear read-back: dp 15 = " + v + " (asked for " + want + ") — scooter did NOT apply the change");
+    toast(ok ? t.gear_applied(gearLabel(v)) : t.gear_rejected(gearLabel(v)));
+  }
 }
 
 // ---- voice speed announcements (Web Speech API) ----
