@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.35";
+const APP_VERSION = "0.7.36";
 
 // -------------------------
 // 1. Localization dictionary
@@ -1861,6 +1861,10 @@ function fmtTime(secs) {
 function fmtSpeed(x) {
   return x <= 0 ? "0" : x.toFixed(1);
 }
+// Fixed decimals for distances, but plain "0" when none (not "0.00").
+function fmtDist(x, dec) {
+  return x <= 0 ? "0" : x.toFixed(dec);
+}
 
 // The scooter's own panel speed (dp 2, km/h, 1:1). It is only used as a cap for
 // the distance-based GPS fallback; when the browser reports coords.speed we
@@ -1965,7 +1969,7 @@ const Geo = {
   render() {
     const U = UNITS[unit];
     $("rideSpeed").textContent = fmtSpeed(this.speedKmh * U.speed);
-    $("rideTrip").textContent = (this.tripM * U.dist).toFixed(U.distDec);
+    $("rideTrip").textContent = fmtDist(this.tripM * U.dist, U.distDec);
     $("rideMax").textContent = fmtSpeed(this.maxKmh * U.speed);
     $("rideAvg").textContent = this.samples ? fmtSpeed(this.sumKmh / this.samples * U.speed) : "0";
     $("rideTime").textContent = fmtTime(this.running ? (Date.now() - this.startedAt) / 1000 : 0);
