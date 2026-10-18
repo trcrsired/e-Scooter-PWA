@@ -120,14 +120,12 @@ to hide it again; the choice is remembered in `localStorage`):
   app offers (once) to save the connected device's advertised name as the
   filter. Importing a JSON merges into this list, and the credentials below
   always apply to the selected scooter.
-- **Speed limits** — the Eco / D / S maximum speed (dp 101 / 102 / 103, km/h).
-  Each mode also has an editable **allowed range** (defaults, i.e. the values we
-  reverse-engineered: Eco 5–15, D 10–24, S 20–31); the value is clamped to its
-  range before being sent, and the value input's `min`/`max` follow it. Ranges
-  and values are stored per profile and saved even offline; **changing a range
-  triggers an extra safety warning confirmation** (a high maximum can make the
-  scooter dangerously fast); only the values that changed are written, each sent
-  directly.
+- **Speed limits** — the Eco / D / S maximum speed (dp 101 / 102 / 103, km/h),
+  set with a **slider** per mode confined to that mode's **fixed** range (the
+  values we reverse-engineered: Eco 5–15, D 10–24, S 20–31). The range is not
+  editable here — writing an exact or out-of-range value is done with the raw
+  Debug datapoint sender. The value is stored per profile (saved even offline)
+  and only the datapoints that changed are written.
 - **Start mode** — how the scooter pulls away from a standstill (dp 16, an
   ENUM): `0` = start directly on the throttle, `1` = run/push to start. Lives on
   the **Ride** dashboard (Scooter controls), shown as a selector, sent directly

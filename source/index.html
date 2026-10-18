@@ -210,32 +210,23 @@
       <div class="tile-meta" id="speedNote"></div>
       <div class="field">
         <label id="speedEcoLabel" for="speedEco"></label>
-        <div class="speed-inputs">
-          <input id="speedEco" type="number" min="0" step="1" inputmode="numeric" placeholder="15">
-          <span class="speed-min-lbl"></span>
-          <input id="speedEcoMin" type="number" min="0" step="1" inputmode="numeric">
-          <span class="speed-max-lbl"></span>
-          <input id="speedEcoMax" type="number" min="0" step="1" inputmode="numeric">
+        <div class="speed-slider-row">
+          <input id="speedEco" type="range" min="5" max="15" step="1" value="15">
+          <span class="speed-slider-val" id="speedEcoVal"></span>
         </div>
       </div>
       <div class="field">
         <label id="speedDLabel" for="speedD"></label>
-        <div class="speed-inputs">
-          <input id="speedD" type="number" min="0" step="1" inputmode="numeric" placeholder="24">
-          <span class="speed-min-lbl"></span>
-          <input id="speedDMin" type="number" min="0" step="1" inputmode="numeric">
-          <span class="speed-max-lbl"></span>
-          <input id="speedDMax" type="number" min="0" step="1" inputmode="numeric">
+        <div class="speed-slider-row">
+          <input id="speedD" type="range" min="10" max="24" step="1" value="24">
+          <span class="speed-slider-val" id="speedDVal"></span>
         </div>
       </div>
       <div class="field">
         <label id="speedSLabel" for="speedS"></label>
-        <div class="speed-inputs">
-          <input id="speedS" type="number" min="0" step="1" inputmode="numeric" placeholder="31">
-          <span class="speed-min-lbl"></span>
-          <input id="speedSMin" type="number" min="0" step="1" inputmode="numeric">
-          <span class="speed-max-lbl"></span>
-          <input id="speedSMax" type="number" min="0" step="1" inputmode="numeric">
+        <div class="speed-slider-row">
+          <input id="speedS" type="range" min="20" max="31" step="1" value="31">
+          <span class="speed-slider-val" id="speedSVal"></span>
         </div>
       </div>
       <div class="sheet-actions">

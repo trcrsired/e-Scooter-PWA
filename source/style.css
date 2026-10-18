@@ -302,15 +302,16 @@ select { cursor: pointer; }
 .inline { display: flex; gap: 8px; align-items: center; }
 .inline input { flex: 1 1 auto; }
 
-/* per-mode speed value + allowed range */
-.speed-inputs {
-  display: grid;
-  grid-template-columns: 1.4fr auto 1fr auto 1fr;
-  gap: 6px;
-  align-items: center;
+/* per-mode speed: a slider (progress bar) within the mode's fixed range */
+.speed-slider-row { display: flex; align-items: center; gap: 10px; }
+.speed-slider-row input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }
+.speed-slider-val {
+  flex: 0 0 auto;
+  min-width: 5em;
+  text-align: right;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
-.speed-inputs input { width: 100%; min-width: 0; }
-.speed-min-lbl, .speed-max-lbl { font-size: 0.78rem; color: var(--muted); }
 .inline .ghost { flex: 0 0 auto; }
 
 /* toggle switch (checkbox + .slider) */

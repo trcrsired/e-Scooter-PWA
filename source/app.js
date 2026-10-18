@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.33";
+const APP_VERSION = "0.7.34";
 
 // -------------------------
 // 1. Localization dictionary
@@ -178,7 +178,7 @@ const i18n = {
     warn_at: (v, u) => `Warn above ${v} ${u}`,
     warn_over: (v, u) => `\u26a0 Too fast \u2014 ${v} ${u}`,
     speed_title: "Speed limits",
-    speed_note: "Maximum speed per riding mode, written to datapoints 101/102/103 (km/h). Set the allowed range per mode; the value is clamped to it.",
+    speed_note: "Maximum speed per riding mode, written to datapoints 101/102/103 (km/h). Drag each bar within its range; to write an exact or out-of-range value use the Debug datapoint sender.",
     speed_eco: "Eco \u2014 dp 101 (km/h)",
     speed_d: "D \u2014 dp 102 (km/h)",
     speed_s: "S \u2014 dp 103 (km/h)",
@@ -386,7 +386,7 @@ const i18n = {
     warn_at: (v, u) => `超过 ${v} ${u} 时警告`,
     warn_over: (v, u) => `\u26a0 超速 —— ${v} ${u}`,
     speed_title: "速度限制",
-    speed_note: "各骑行模式下的最高速度，写入数据点 101/102/103（km/h）。可为每个模式设置允许范围，数值会被限制在范围内。",
+    speed_note: "各骑行模式下的最高速度，写入数据点 101/102/103（km/h）。在本模式的范围内拖动滑块选择；如需写入精确或超出范围的值，请使用调试页的数据点发送器。",
     speed_eco: "节能 \u2014 dp 101（km/h）",
     speed_d: "行驶 \u2014 dp 102（km/h）",
     speed_s: "运动 \u2014 dp 103（km/h）",
@@ -502,8 +502,6 @@ function applyStatic() {
   $("speedDLabel").textContent = t.speed_d;
   $("speedSLabel").textContent = t.speed_s;
   $("speedSaveBtn").textContent = t.speed_save;
-  document.querySelectorAll(".speed-min-lbl").forEach(e => { e.textContent = t.range_min; });
-  document.querySelectorAll(".speed-max-lbl").forEach(e => { e.textContent = t.range_max; });
   $("scooterCtlTitle").textContent = t.scooter_ctl_title;
   $("startLabel").textContent = t.start_label;
   const startSel = $("startSelect");
@@ -936,36 +934,36 @@ $("devIdInput").addEventListener("change", () => updateActiveDevice({ device_id:
 $("uuidInput").addEventListener("change", () => updateActiveDevice({ uuid: uuidInput.value.trim() }));
 
 // ---- speed limits (dp 101/102/103 = Eco / D / S max speed, km/h) ----
-// [key, dp id]. Each profile also carries an editable allowed range per mode
-// (defaults below); the value is clamped to that range before it is sent.
+// Set with a slider (progress bar) inside each mode's fixed allowed range. The
+// ranges are deliberately NOT editable here: to write an exact value, or one
+// outside the range, use the raw datapoint sender in Debug.
 const SPEED_DPS = [["eco", 101], ["d", 102], ["s", 103]];
 const SPEED_DEFAULT_RANGES = { eco: { min: 5, max: 15 }, d: { min: 10, max: 24 }, s: { min: 20, max: 31 } };
 const speedCap = k => k.charAt(0).toUpperCase() + k.slice(1);
 function speedInputEl(key) { return $("speed" + speedCap(key)); }
-function rangeMinEl(key) { return $("speed" + speedCap(key) + "Min"); }
-function rangeMaxEl(key) { return $("speed" + speedCap(key) + "Max"); }
+function speedValEl(key) { return $("speed" + speedCap(key) + "Val"); }
 
-function getRange(dev, key) {
-  const r = (dev && dev.ranges && dev.ranges[key]) || {};
-  const d = SPEED_DEFAULT_RANGES[key];
-  let min = Number(r.min), max = Number(r.max);
-  if (!Number.isFinite(min)) min = d.min;
-  if (!Number.isFinite(max)) max = d.max;
-  if (max < min) max = min;
-  return { min, max };
+function renderSpeedVal(key) {
+  const el = speedInputEl(key), out = speedValEl(key);
+  if (el && out) out.textContent = el.value + " km/h";
 }
 
 function loadSpeedInputs(dev) {
   const s = (dev && dev.speeds) || {};
   for (const [key] of SPEED_DPS) {
-    const { min, max } = getRange(dev, key);
-    rangeMinEl(key).value = String(min);
-    rangeMaxEl(key).value = String(max);
-    const valEl = speedInputEl(key);
-    valEl.min = String(min);
-    valEl.max = String(max);
+    const d = SPEED_DEFAULT_RANGES[key];
+    const el = speedInputEl(key);
+    el.min = String(d.min);
+    el.max = String(d.max);
+    el.step = "1";
+    if (!el.dataset.bound) {
+      el.dataset.bound = "1";
+      el.addEventListener("input", () => renderSpeedVal(key));
+    }
     const kmh = Number(s[key]);
-    valEl.value = Number.isFinite(kmh) && kmh > 0 ? String(Math.round(kmh)) : "";
+    const v = Number.isFinite(kmh) && kmh > 0 ? Math.round(kmh) : d.max;
+    el.value = String(Math.max(d.min, Math.min(d.max, v)));
+    renderSpeedVal(key);
   }
 }
 
@@ -973,42 +971,20 @@ $("speedSaveBtn").addEventListener("click", async () => {
   const dev = importedDevices[activeIndex] || {};
   const prev = dev.speeds || {};
   const next = Object.assign({}, prev);
-  const ranges = {};
-  let rangeChanged = false;
-  // Ranges and values are stored per profile even with no live session; only
-  // the datapoints that actually changed are sent (and only when armed).
+  // Values are stored per profile even with no live session; only the datapoints
+  // that actually changed are sent (and only when armed).
   for (const [key] of SPEED_DPS) {
     const d = SPEED_DEFAULT_RANGES[key];
-    const cur = getRange(dev, key); // the profile's saved range
-    let min = Math.round(Number(rangeMinEl(key).value));
-    let max = Math.round(Number(rangeMaxEl(key).value));
-    if (!Number.isFinite(min) || min < 0) min = d.min;
-    if (!Number.isFinite(max) || max < min) max = d.max;
-    rangeMinEl(key).value = String(min);
-    rangeMaxEl(key).value = String(max);
-    ranges[key] = { min, max };
-    if (min !== cur.min || max !== cur.max) rangeChanged = true;
-
-    const valEl = speedInputEl(key);
-    valEl.min = String(min);
-    valEl.max = String(max);
-    const raw = valEl.value.trim();
-    if (raw === "") continue;
-    let v = Math.round(Number(raw));
-    if (!Number.isFinite(v)) continue;
-    v = Math.max(min, Math.min(max, v));
-    valEl.value = String(v);
+    const el = speedInputEl(key);
+    let v = Math.round(Number(el.value));
+    if (!Number.isFinite(v)) v = d.max;
+    v = Math.max(d.min, Math.min(d.max, v));
+    el.value = String(v);
+    renderSpeedVal(key);
     next[key] = v;
   }
 
-  // Changing the allowed range (especially a high maximum) is a safety-relevant
-  // action, so it needs an explicit extra acknowledgement before anything is saved.
-  if (rangeChanged) {
-    const ok = await askPrompt(t.range_warn_title, t.range_warn_body, t.range_warn_ok, t.range_warn_cancel);
-    if (!ok) { loadSpeedInputs(dev); return; }
-  }
-
-  updateActiveDevice({ speeds: next, ranges: ranges });
+  updateActiveDevice({ speeds: next });
 
   const savedOnly = () => {
     $("speedStatus").textContent = t.speed_saved;

@@ -34,7 +34,9 @@ scooter's datapoints.
   datapoint whose meaning is *assumed* (a cruise-control setting), so the label
   carries a "?" — it is the only control we are not yet sure about.
 - **Speed limits** — set the Eco / D / S maximum speed (km/h) in Settings
-  (datapoints 101 / 102 / 103), each with an editable allowed range.
+  (datapoints 101 / 102 / 103) with a slider per mode, confined to that mode's
+  range (Eco 5–15, D 10–24, S 20–31). Writing an exact or out-of-range value is
+  left to the raw Debug datapoint sender.
 - **Start mode** — choose how the scooter pulls away (dp 16) right on the Ride
   dashboard: start directly on the throttle, or run/push to start.
 - **Panel units** — switch the speed unit shown on the scooter's *own* display
