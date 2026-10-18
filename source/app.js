@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.34";
+const APP_VERSION = "0.7.35";
 
 // -------------------------
 // 1. Localization dictionary
@@ -179,9 +179,9 @@ const i18n = {
     warn_over: (v, u) => `\u26a0 Too fast \u2014 ${v} ${u}`,
     speed_title: "Speed limits",
     speed_note: "Maximum speed per riding mode, written to datapoints 101/102/103 (km/h). Drag each bar within its range; to write an exact or out-of-range value use the Debug datapoint sender.",
-    speed_eco: "Eco \u2014 dp 101 (km/h)",
-    speed_d: "D \u2014 dp 102 (km/h)",
-    speed_s: "S \u2014 dp 103 (km/h)",
+    speed_eco: r => `Eco \u2014 dp 101 (${r.min}\u2013${r.max} km/h)`,
+    speed_d: r => `D \u2014 dp 102 (${r.min}\u2013${r.max} km/h)`,
+    speed_s: r => `S \u2014 dp 103 (${r.min}\u2013${r.max} km/h)`,
     range_min: "min",
     range_max: "max",
     range_warn_title: "Change the allowed range?",
@@ -387,9 +387,9 @@ const i18n = {
     warn_over: (v, u) => `\u26a0 超速 —— ${v} ${u}`,
     speed_title: "速度限制",
     speed_note: "各骑行模式下的最高速度，写入数据点 101/102/103（km/h）。在本模式的范围内拖动滑块选择；如需写入精确或超出范围的值，请使用调试页的数据点发送器。",
-    speed_eco: "节能 \u2014 dp 101（km/h）",
-    speed_d: "行驶 \u2014 dp 102（km/h）",
-    speed_s: "运动 \u2014 dp 103（km/h）",
+    speed_eco: r => `节能 \u2014 dp 101（${r.min}\u2013${r.max} km/h）`,
+    speed_d: r => `行驶 \u2014 dp 102（${r.min}\u2013${r.max} km/h）`,
+    speed_s: r => `运动 \u2014 dp 103（${r.min}\u2013${r.max} km/h）`,
     range_min: "最小",
     range_max: "最大",
     range_warn_title: "更改允许范围？",
@@ -479,6 +479,12 @@ if (!wakeSupported) {
   });
 }
 
+// Speed-limit datapoints and each mode's fixed allowed range (km/h). Declared
+// before applyStatic so the Settings labels can show each gear's range; the
+// slider code further down reuses the same constants.
+const SPEED_DPS = [["eco", 101], ["d", 102], ["s", 103]];
+const SPEED_DEFAULT_RANGES = { eco: { min: 5, max: 15 }, d: { min: 10, max: 24 }, s: { min: 20, max: 31 } };
+
 function applyStatic() {
   document.documentElement.lang = lang;
   $("title").textContent = t.title;
@@ -498,9 +504,9 @@ function applyStatic() {
   $("btNameNote").textContent = t.bt_name_note;
   $("speedTitle").textContent = t.speed_title;
   $("speedNote").textContent = t.speed_note;
-  $("speedEcoLabel").textContent = t.speed_eco;
-  $("speedDLabel").textContent = t.speed_d;
-  $("speedSLabel").textContent = t.speed_s;
+  $("speedEcoLabel").textContent = t.speed_eco(SPEED_DEFAULT_RANGES.eco);
+  $("speedDLabel").textContent = t.speed_d(SPEED_DEFAULT_RANGES.d);
+  $("speedSLabel").textContent = t.speed_s(SPEED_DEFAULT_RANGES.s);
   $("speedSaveBtn").textContent = t.speed_save;
   $("scooterCtlTitle").textContent = t.scooter_ctl_title;
   $("startLabel").textContent = t.start_label;
@@ -934,11 +940,10 @@ $("devIdInput").addEventListener("change", () => updateActiveDevice({ device_id:
 $("uuidInput").addEventListener("change", () => updateActiveDevice({ uuid: uuidInput.value.trim() }));
 
 // ---- speed limits (dp 101/102/103 = Eco / D / S max speed, km/h) ----
-// Set with a slider (progress bar) inside each mode's fixed allowed range. The
-// ranges are deliberately NOT editable here: to write an exact value, or one
-// outside the range, use the raw datapoint sender in Debug.
-const SPEED_DPS = [["eco", 101], ["d", 102], ["s", 103]];
-const SPEED_DEFAULT_RANGES = { eco: { min: 5, max: 15 }, d: { min: 10, max: 24 }, s: { min: 20, max: 31 } };
+// Set with a slider (progress bar) inside each mode's fixed allowed range
+// (SPEED_DEFAULT_RANGES, declared above). The ranges are deliberately NOT
+// editable here: to write an exact value, or one outside the range, use the raw
+// datapoint sender in Debug.
 const speedCap = k => k.charAt(0).toUpperCase() + k.slice(1);
 function speedInputEl(key) { return $("speed" + speedCap(key)); }
 function speedValEl(key) { return $("speed" + speedCap(key) + "Val"); }
