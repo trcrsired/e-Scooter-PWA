@@ -14,7 +14,8 @@ scooter's datapoints.
 - **Ride dashboard** — a big GPS-speed hero with trip / max / average / elapsed
   time and your live GPS coordinates (📍 lat, lon) when tracking, unit toggle
   (**km/h · mph · m/s**) and live scooter read-outs (panel speed, battery,
-  voltage, temperature, total distance). Speed comes from the browser
+  voltage, temperature, total distance, plus the scooter's own **trip
+  distance** dp 5 and **trip time** dp 6). Speed comes from the browser
   Geolocation API's own `coords.speed` (GNSS doppler) when available; otherwise
   it is estimated from position over a 30 s window and capped at the scooter's
   reported panel speed (dp 2).
@@ -29,6 +30,9 @@ scooter's datapoints.
 - **Lock & headlight** — 🔒 Locked / 🔓 Unlocked (dp 1) and 💡 On / 🔌 Off
   (dp 8) right on the Ride dashboard; it nags you to switch the headlight on
   when you connect after dark (18:00–06:00).
+- **"Cruise?"** — a toggle for dp 13 on the Ride dashboard. dp 13 is the one
+  datapoint whose meaning is *assumed* (a cruise-control setting), so the label
+  carries a "?" — it is the only control we are not yet sure about.
 - **Speed limits** — set the Eco / D / S maximum speed (km/h) in Settings
   (datapoints 101 / 102 / 103), each with an editable allowed range.
 - **Start mode** — choose how the scooter pulls away (dp 16) right on the Ride

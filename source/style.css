@@ -650,7 +650,8 @@ main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 .mode-btn .mode-emoji { font-size: 1.15rem; line-height: 1; }
 .mode-btn.is-active { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
 
-.ride-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.ride-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.ride-controls .lock-btn { font-size: 0.9rem; }
 .ride-controls .lock-btn { margin-bottom: 0; }
 
 .lock-btn {

@@ -68,13 +68,15 @@ to hide it again; the choice is remembered in `localStorage`):
   live **GPS coordinates** (📍 latitude, longitude, 6 dp) while tracking. Pick the
   display unit (**km/h**, **mph** or **m/s**). Tracking is manual: press
   **Start tracking**. The scooter's own read-outs (panel speed, battery, voltage,
-  temp, and the lifetime odometer — dp 12, raw ÷ 10 = km) are
-  shown as cards. A **mode selector** (🚶 Walk / 🍃 Eco / 🛴 行驶 / ⚡ 运动) shows
+  temp, the lifetime odometer — dp 12, raw ÷ 10 = km — and the scooter's own
+  trip distance dp 5 and trip time dp 6) are shown as cards. A **mode selector**
+  (🚶 Walk / 🍃 Eco / 🛴 行驶 / ⚡ 运动) shows
   the current ride mode from the gear datapoint (dp 15) and lets you switch it
   (**sent immediately, no confirmation gate** — switching gear is a routine,
   reversible action). A **lock toggle** (dp 1 — the scooter's
-  lock boolean, shown as 🔒 Locked / 🔓 Unlocked) and a **headlight toggle**
-  (dp 8, 💡 On / 🔌 Off) sit side by side right under the hero. When the app
+  lock boolean, shown as 🔒 Locked / 🔓 Unlocked), a **headlight toggle**
+  (dp 8, 💡 On / 🔌 Off) and a **“Cruise?”** toggle (dp 13 — see *Datapoint
+  notes*) sit side by side right under the hero. When the app
   first receives the headlight state and it is **night (18:00–06:00 local
   time)** with the light off, it suggests turning it on (a toast plus a pulsing
   glow on the button, once per session). Below them, a **Scooter controls**
@@ -155,6 +157,32 @@ When the app is not connected — on load, after a disconnect, or when you switc
 profiles — it rebuilds the controls and fills them from that snapshot instead,
 showing an “Offline — last seen …” note with the time the state was recorded.
 The Debug **Dump datapoints (JSON)** export includes that timestamp too.
+
+## Datapoint notes
+
+Findings from comparing two **Dump datapoints (JSON)** exports taken before and
+after a 12.5 km ride, plus a full 12:47 BLE capture:
+
+- **dp 5 — trip distance.** Went `0` → `125` while the lifetime odometer
+  (dp 12) went `24034` → `24159` — the same +125 delta. So dp 5 is the
+  *current trip's* distance on the same ×10 scale as dp 12 (÷ 10 = km), reset
+  between trips. Shown as the **Scooter trip** card.
+- **dp 6 — trip time (seconds).** Went `0` → `2316` in the same interval;
+  2316 s = 38.6 min over 12.5 km is a believable **19.4 km/h** average, and it
+  was `0` alongside dp 5 at the trip's start. No other unit fits (minutes ≫
+  trip, ×10 of seconds too slow, and it is neither distance nor remaining
+  range). Shown as the **Scooter time** card (`m:ss`). *Assumed* — a controlled
+  10-minute ride should advance it by ~600 to confirm.
+- **dp 13 — assumed cruise control.** A BOOL that was `true` in **every** sample
+  (both dumps; 10/10 reports in the capture) even while parked and locked. With
+  no transition to observe, the meaning is inferred: a persistent setting like
+  *cruise control enabled* fits best (not a live state such as “cruise active”,
+  which would read false at rest, and not charging — the rider was moving). It
+  is exposed on Ride as the **“Cruise?”** toggle; the trailing “?” marks it as
+  the one control we are not yet sure about. Confirm by toggling cruise in the
+  official Tuya app and re-dumping.
+- **dp 24 = 2540** was constant across both dumps and the whole capture — a
+  fixed config/limit value, not a live measurement; left unlabelled.
 
 ## Safety
 

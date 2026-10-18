@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.32";
+const APP_VERSION = "0.7.33";
 
 // -------------------------
 // 1. Localization dictionary
@@ -92,6 +92,8 @@ const i18n = {
     temp: "Temp",
     odo: "Odometer",
     panel_speed: "Scooter speed",
+    scooter_trip: "Scooter trip",
+    scooter_time: "Scooter time",
     dp_lock: "lock",
     dp_panel_speed: "panel speed",
     dp_battery: "battery",
@@ -106,6 +108,9 @@ const i18n = {
     dp_speed_d: "D speed limit",
     dp_speed_s: "S speed limit",
     dp_offline: "auto-off time",
+    dp_trip_dist: "trip distance",
+    dp_trip_time: "trip time",
+    dp_cruise: "cruise (?)",
     wake_label: "Keep screen on",
     wake_unsupported: "Wake Lock not supported here",
     mode_walk: "Walk",
@@ -129,6 +134,11 @@ const i18n = {
     light_applied: v => `Headlight confirmed: ${v}`,
     light_rejected: v => `Headlight not applied (still ${v})`,
     light_night_hint: "It's dark outside \u2014 turn on the headlight?",
+    cruise_label: "Cruise?",
+    cruise_on: "Cruise on?",
+    cruise_off: "Cruise off?",
+    cruise_applied: v => `Cruise confirmed: ${v}`,
+    cruise_rejected: v => `Cruise not applied (still ${v})`,
     bt_name_label: "Bluetooth name filter",
     bt_name_note: "Only devices whose name starts with this appear in the chooser.",
     bt_name_prompt_title: "Remember this scooter?",
@@ -290,6 +300,8 @@ const i18n = {
     temp: "温度",
     odo: "总里程",
     panel_speed: "面板车速",
+    scooter_trip: "车辆单次里程",
+    scooter_time: "车辆单次时长",
     dp_lock: "锁",
     dp_panel_speed: "面板车速",
     dp_battery: "电量",
@@ -297,12 +309,16 @@ const i18n = {
     dp_odometer: "总里程",
     dp_gear: "骑行模式（挡位）",
     dp_start_mode: "启动方式",
+    dp_panel_unit: "面板单位",
     dp_temp: "温度",
     dp_voltage: "电压",
     dp_speed_eco: "节能限速",
     dp_speed_d: "行驶限速",
     dp_speed_s: "运动限速",
     dp_offline: "自动关机时间",
+    dp_trip_dist: "单次里程",
+    dp_trip_time: "单次时长",
+    dp_cruise: "定速巡航（？）",
     mode_walk: "步行",
     wake_label: "保持屏幕常亮",
     wake_unsupported: "此处不支持屏幕常亮",
@@ -326,6 +342,11 @@ const i18n = {
     light_applied: v => `大灯已确认：${v}`,
     light_rejected: v => `大灯未生效（仍为 ${v}）`,
     light_night_hint: "天黑了 \u2014 要打开大灯吗？",
+    cruise_label: "定速巡航？",
+    cruise_on: "定速巡航已开？",
+    cruise_off: "定速巡航已关？",
+    cruise_applied: v => `定速巡航已确认：${v}`,
+    cruise_rejected: v => `定速巡航未生效（仍为 ${v}）`,
     bt_name_label: "蓝牙名称过滤",
     bt_name_note: "选择滑板车时，只显示名称以此开头的设备。",
     bt_name_prompt_title: "记住这台滑板车？",
@@ -1202,6 +1223,7 @@ function refillFromLastDp() {
     updateGear(id, v, undefined);
     updateLock(id, v, undefined);
     updateHeadlight(id, v, undefined);
+    updateCruise(id, v, undefined);
     updateStartMode(id, v, undefined);
     updatePanelUnit(id, v, undefined);
     updateOffline(id, v);
@@ -1216,6 +1238,7 @@ function showDeviceState(dev) {
   currentGear = null;
   currentLock = null;
   currentLight = null;
+  currentCruise = null;
   currentStartMode = null;
   currentPanelUnit = null;
   panelSpeedKmh = null;
@@ -1224,6 +1247,7 @@ function showDeviceState(dev) {
   buildModeButtons();
   renderLock();
   renderLight();
+  renderCruise();
   renderLastSeenNote();
   if (tuya) return;
 
@@ -1300,9 +1324,12 @@ const KNOWN_DPS = {
   1: "dp_lock",
   2: "dp_panel_speed",
   3: "dp_battery",
+  5: "dp_trip_dist",
+  6: "dp_trip_time",
   8: "dp_headlight",
   11: "dp_panel_unit",
   12: "dp_odometer",
+  13: "dp_cruise",
   15: "dp_gear",
   16: "dp_start_mode",
   18: "dp_temp",
@@ -1761,6 +1788,7 @@ function onDp(dp) {
   updateGear(dp.id, dp.value, dp.type);
   updateLock(dp.id, dp.value, dp.type);
   updateHeadlight(dp.id, dp.value, dp.type);
+  updateCruise(dp.id, dp.value, dp.type);
   updateStartMode(dp.id, dp.value, dp.type);
   updatePanelUnit(dp.id, dp.value, dp.type);
   updateOffline(dp.id, dp.value);
@@ -1847,6 +1875,10 @@ function haversine(a, b) {
 function fmtTime(secs) {
   const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
   return m + ":" + String(s).padStart(2, "0");
+}
+// One decimal for speeds, but plain "0" when stopped (not "0.0").
+function fmtSpeed(x) {
+  return x <= 0 ? "0" : x.toFixed(1);
 }
 
 // The scooter's own panel speed (dp 2, km/h, 1:1). It is only used as a cap for
@@ -1951,10 +1983,10 @@ const Geo = {
   },
   render() {
     const U = UNITS[unit];
-    $("rideSpeed").textContent = (this.speedKmh * U.speed).toFixed(1);
+    $("rideSpeed").textContent = fmtSpeed(this.speedKmh * U.speed);
     $("rideTrip").textContent = (this.tripM * U.dist).toFixed(U.distDec);
-    $("rideMax").textContent = (this.maxKmh * U.speed).toFixed(1);
-    $("rideAvg").textContent = this.samples ? (this.sumKmh / this.samples * U.speed).toFixed(1) : "0.0";
+    $("rideMax").textContent = fmtSpeed(this.maxKmh * U.speed);
+    $("rideAvg").textContent = this.samples ? fmtSpeed(this.sumKmh / this.samples * U.speed) : "0";
     $("rideTime").textContent = fmtTime(this.running ? (Date.now() - this.startedAt) / 1000 : 0);
     checkSpeedWarn();
   },
@@ -1970,6 +2002,8 @@ const RIDE_CARDS = [
   { id: 20, label: () => t.volt, scale: 2, unit: "V" },
   { id: 18, label: () => t.temp, scale: 1, unit: "°C" },
   { id: 12, label: () => t.odo, scale: 1, odo: true }, // total distance since purchase (raw/10 km)
+  { id: 5, label: () => t.scooter_trip, scale: 0, trip: true }, // this trip's distance (raw/10 km)
+  { id: 6, label: () => t.scooter_time, scale: 0, dur: true },  // this trip's time (seconds)
 ];
 const rideCards = new Map();
 function buildRideCards() {
@@ -1982,7 +2016,7 @@ function buildRideCards() {
     const val = document.createElement("div"); val.className = "tile-value"; val.textContent = "–";
     tile.appendChild(lab); tile.appendChild(val);
     host.appendChild(tile);
-    rideCards.set(c.id, { el: val, scale: c.scale, unit: c.unit, odo: !!c.odo, speed: !!c.speed, raw: undefined });
+    rideCards.set(c.id, { el: val, scale: c.scale, unit: c.unit, odo: !!c.odo, speed: !!c.speed, trip: !!c.trip, dur: !!c.dur, raw: undefined });
   }
 }
 function updateRideCard(id, v) {
@@ -1999,6 +2033,17 @@ function updateRideCard(id, v) {
     // dp 12 is ten times the kilometre value (24034 -> 2403.4 km).
     const u = UNITS[unit];
     e.el.textContent = ((v / 10) * u.distKm).toFixed(1) + " " + u.distLabel;
+    return;
+  }
+  if (e.trip) {
+    // dp 5 is this trip's distance, also ten times the kilometre value.
+    const u = UNITS[unit];
+    e.el.textContent = ((v / 10) * u.distKm).toFixed(1) + " " + u.distLabel;
+    return;
+  }
+  if (e.dur) {
+    // dp 6 is this trip's time in seconds (2316 -> 38:36).
+    e.el.textContent = fmtTime(v);
     return;
   }
   const num = v / Math.pow(10, e.scale);
@@ -2197,6 +2242,57 @@ function updateHeadlight(id, v, type) {
   }
 }
 $("lightBtn").addEventListener("click", onLightClick);
+
+// ---- cruise control (dp 13, assumed) ----
+// dp 13 is unconfirmed: every capture so far reports it as a BOOL that is always
+// true — even while parked and locked — which fits "cruise control enabled" (a
+// persistent setting, not a live state). Treated as a toggle with a trailing "?"
+// to flag the uncertainty, verified against the real read-back like lock/light.
+const CRUISE_DP = 13;
+let cruiseType = null;
+let currentCruise = null;
+let cruiseExpect = null;
+
+function renderCruise() {
+  const btn = $("cruiseBtn");
+  if (!btn) return;
+  const on = currentCruise === true;
+  btn.classList.toggle("is-on", on);
+  $("cruiseIcon").textContent = currentCruise === null ? "\u2754" : (on ? "\ud83d\udfe2" : "\ud83d\udd18");
+  $("cruiseText").textContent = currentCruise === null
+    ? t.cruise_label
+    : (on ? t.cruise_on : t.cruise_off);
+}
+
+function onCruiseClick() {
+  if (!tuya) { toast(t.status_disconnected); return; }
+  if (!armed) { toast(t.arm_needed); return; }
+  const want = currentCruise ? 0 : 1; // toggle
+  const label = want ? t.cruise_on : t.cruise_off;
+  requestSend(CRUISE_DP, cruiseType || DT.BOOL, want, label, null,
+    () => { cruiseExpect = { value: want, at: Date.now() }; });
+}
+
+function updateCruise(id, v, type) {
+  if (id !== CRUISE_DP) return;
+  if (type != null) cruiseType = type;
+  if (v == null) return;
+  currentCruise = (typeof v === "boolean") ? v : !!Number(v);
+  renderCruise();
+  if (cruiseExpect && Date.now() - cruiseExpect.at < 8000) {
+    const want = cruiseExpect.value;
+    cruiseExpect = null;
+    const got = currentCruise ? 1 : 0;
+    const ok = got === want;
+    log(ok
+      ? "cruise read-back: dp 13 = " + got + " — scooter applied it"
+      : "cruise read-back: dp 13 = " + got + " (asked for " + want + ") — scooter did NOT apply it");
+    toast(ok
+      ? t.cruise_applied(got ? t.cruise_on : t.cruise_off)
+      : t.cruise_rejected(got ? t.cruise_on : t.cruise_off));
+  }
+}
+$("cruiseBtn").addEventListener("click", onCruiseClick);
 
 // ---- start mode (dp 16) ----
 // ENUM: 0 = start directly (throttle from standstill), 1 = run/push to start.
@@ -2413,7 +2509,7 @@ const Announce = {
   speak() {
     this.count++;
     const U = UNITS[unit];
-    const v = (Geo.speedKmh * U.speed).toFixed(1);
+    const v = fmtSpeed(Geo.speedKmh * U.speed);
     const spoken = (U.speak && (U.speak[lang] || U.speak.en)) || U.speedLabel;
     const text = v + " " + spoken;   // e.g. "22 kilometers per hour"
     log("tts " + this.count + ": " + text);
