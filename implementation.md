@@ -179,8 +179,14 @@ after a 12.5 km ride, plus a full 12:47 BLE capture:
   *cruise control enabled* fits best (not a live state such as “cruise active”,
   which would read false at rest, and not charging — the rider was moving). It
   is exposed on Ride as the **“Cruise?”** toggle; the trailing “?” marks it as
-  the one control we are not yet sure about. Confirm by toggling cruise in the
-  official Tuya app and re-dumping.
+  the one control we are not yet sure about. Note (2026-10-18): the official
+  Tuya app *has* a cruise toggle, but it also **fails to change cruise** on this
+  scooter — the same pattern as the lock (dp 1), whose remote writes are
+  acknowledged but not applied. So dp 13 is still plausibly cruise with firmware
+  that ignores the write; distinguishing that from cruise living on a different
+  (write-only) datapoint needs an HCI capture of the official app while toggling
+  it. Tapping our toggle and checking the read-back line shows whether the write
+  is applied at all.
 - **dp 24 = 2540** was constant across both dumps and the whole capture — a
   fixed config/limit value, not a live measurement; left unlabelled.
 
