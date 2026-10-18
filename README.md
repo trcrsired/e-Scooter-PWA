@@ -33,10 +33,15 @@ scooter's datapoints.
 - **"Cruise?"** — a toggle for dp 13 on the Ride dashboard. dp 13 is the one
   datapoint whose meaning is *assumed* (a cruise-control setting), so the label
   carries a "?" — it is the only control we are not yet sure about.
+- **Scooter model** — pick your scooter from a list of supported models in
+  Settings. Each model carries its own per-mode speed ranges (currently
+  **AOVO Pro S9 (YFS-Z1)**: Eco 5–15, D 10–24, S 20–31); the choice is stored on
+  the profile and drives the sliders below. More models can be added over time.
 - **Speed limits** — set the Eco / D / S maximum speed (km/h) in Settings
   (datapoints 101 / 102 / 103) with a slider per mode, confined to that mode's
-  range (Eco 5–15, D 10–24, S 20–31). Writing an exact or out-of-range value is
-  left to the raw Debug datapoint sender.
+  range taken from the selected model (AOVO Pro S9: Eco 5–15, D 10–24,
+  S 20–31). The range is shown in each mode's label. Writing an exact or
+  out-of-range value is left to the raw Debug datapoint sender.
 - **Start mode** — choose how the scooter pulls away (dp 16) right on the Ride
   dashboard: start directly on the throttle, or run/push to start.
 - **Panel units** — switch the speed unit shown on the scooter's *own* display

@@ -2,7 +2,7 @@
 // 0. Version — the single source of truth for "is the browser running the
 //    latest build?". Bump this on EVERY change; it is shown in the app bar.
 // -------------------------
-const APP_VERSION = "0.7.36";
+const APP_VERSION = "0.7.37";
 
 // -------------------------
 // 1. Localization dictionary
@@ -155,6 +155,8 @@ const i18n = {
     voice_default: "Default voice",
     device_title: "Scooter",
     device_name_label: "Scooter name",
+    model_label: "Scooter model",
+    model_note: "Sets the per-mode speed ranges used by the sliders below.",
     device_pick_label: "Imported scooter",
     import_label: "Load JSON config",
     cred_hint: "Preferred: import your scooter's JSON from the Tuya IoT platform —",
@@ -363,6 +365,8 @@ const i18n = {
     voice_default: "默认语音",
     device_title: "滑板车",
     device_name_label: "滑板车名称",
+    model_label: "滑板车型号",
+    model_note: "决定下方滑块各模式的允许速度范围。",
     device_pick_label: "已导入的滑板车",
     import_label: "加载 JSON 配置",
     cred_hint: "推荐：从涂鸦 IoT 平台导入滑板车的 JSON ——",
@@ -479,11 +483,60 @@ if (!wakeSupported) {
   });
 }
 
-// Speed-limit datapoints and each mode's fixed allowed range (km/h). Declared
-// before applyStatic so the Settings labels can show each gear's range; the
-// slider code further down reuses the same constants.
+// ---- supported scooter models ----
+// Each entry is a per-model profile. The important part is `ranges`: the
+// per-mode (eco/d/s) allowed speed range in km/h, which drives the Settings
+// sliders and their labels. Add future scooters here; the chosen key is stored on
+// the device profile as `profile` (not `model`, which already holds the Tuya
+// model string). Everything else (credentials, Bluetooth name filter) stays per
+// profile, not per model.
+const DEVICE_MODELS = {
+  "aovo-pro-s9": {
+    label: "AOVO Pro S9 (YFS-Z1)",
+    ranges: { eco: { min: 5, max: 15 }, d: { min: 10, max: 24 }, s: { min: 20, max: 31 } },
+  },
+};
+const DEFAULT_MODEL = "aovo-pro-s9";
+// Speed-limit datapoints (dp 101/102/103 = Eco/D/S max speed).
 const SPEED_DPS = [["eco", 101], ["d", 102], ["s", 103]];
-const SPEED_DEFAULT_RANGES = { eco: { min: 5, max: 15 }, d: { min: 10, max: 24 }, s: { min: 20, max: 31 } };
+
+// The active scooter list is declared here (before applyStatic) so the labels
+// can read the selected profile's model ranges during localization.
+let importedDevices = [];
+let activeIndex = 0;
+
+function modelRanges(dev) {
+  const key = (dev && dev.profile) || DEFAULT_MODEL;
+  return (DEVICE_MODELS[key] || DEVICE_MODELS[DEFAULT_MODEL]).ranges;
+}
+function speedRange(dev, key) {
+  return modelRanges(dev)[key] || DEVICE_MODELS[DEFAULT_MODEL].ranges[key];
+}
+function renderSpeedLabels(dev) {
+  $("speedEcoLabel").textContent = t.speed_eco(speedRange(dev, "eco"));
+  $("speedDLabel").textContent = t.speed_d(speedRange(dev, "d"));
+  $("speedSLabel").textContent = t.speed_s(speedRange(dev, "s"));
+}
+function fillModelSelect() {
+  const sel = $("modelSelect");
+  if (!sel) return;
+  const dev = importedDevices[activeIndex] || {};
+  sel.textContent = "";
+  for (const [key, m] of Object.entries(DEVICE_MODELS)) {
+    const o = document.createElement("option");
+    o.value = key;
+    o.textContent = m.label;
+    sel.appendChild(o);
+  }
+  sel.value = DEVICE_MODELS[dev.profile] ? dev.profile : DEFAULT_MODEL;
+}
+// Change the active profile's model and re-bound the sliders to its ranges.
+$("modelSelect") && $("modelSelect").addEventListener("change", () => {
+  const dev = importedDevices[activeIndex];
+  if (!dev) return;
+  updateActiveDevice({ profile: $("modelSelect").value });
+  loadSpeedInputs(dev);
+});
 
 function applyStatic() {
   document.documentElement.lang = lang;
@@ -497,6 +550,8 @@ function applyStatic() {
   $("voiceLabel").textContent = t.voice_label;
   $("deviceTitle").textContent = t.device_title;
   $("deviceNameLabel").textContent = t.device_name_label;
+  $("modelLabel").textContent = t.model_label;
+  $("modelNote").textContent = t.model_note;
   $("devicePickLabel").textContent = t.device_pick_label;
   $("deviceAddBtn").textContent = t.device_add;
   $("deviceRemoveBtn").textContent = t.device_remove;
@@ -504,9 +559,7 @@ function applyStatic() {
   $("btNameNote").textContent = t.bt_name_note;
   $("speedTitle").textContent = t.speed_title;
   $("speedNote").textContent = t.speed_note;
-  $("speedEcoLabel").textContent = t.speed_eco(SPEED_DEFAULT_RANGES.eco);
-  $("speedDLabel").textContent = t.speed_d(SPEED_DEFAULT_RANGES.d);
-  $("speedSLabel").textContent = t.speed_s(SPEED_DEFAULT_RANGES.s);
+  renderSpeedLabels(importedDevices[activeIndex]);
   $("speedSaveBtn").textContent = t.speed_save;
   $("scooterCtlTitle").textContent = t.scooter_ctl_title;
   $("startLabel").textContent = t.start_label;
@@ -740,8 +793,6 @@ const LS_NAME = "escooter.device_name";
 const LS_DEVICES = "escooter.devices";
 const LS_ACTIVE = "escooter.active";
 const importStatusEl = $("importStatus");
-let importedDevices = [];
-let activeIndex = 0;
 
 function deviceLabel(d, i) {
   return (d && (d.device_name || d.name || d.model)) || ("Scooter " + (i + 1));
@@ -791,7 +842,7 @@ function persistDevices() {
 }
 function ensureDevices() {
   if (!importedDevices.length) {
-    importedDevices = [{ device_name: "Scooter 1", local_key: "", device_id: "", uuid: "" }];
+    importedDevices = [{ device_name: "Scooter 1", local_key: "", device_id: "", uuid: "", profile: DEFAULT_MODEL }];
     activeIndex = 0;
     persistDevices();
   }
@@ -814,6 +865,7 @@ function loadDeviceIntoForm(dev) {
   $("deviceNameInput").value = dev.device_name || "";
   $("btNameInput").value = dev.bt_name || "";
   $("deviceName").textContent = dev.device_name || "";
+  $("modelSelect").value = DEVICE_MODELS[dev.profile] ? dev.profile : DEFAULT_MODEL;
   loadSpeedInputs(dev);
   loadOfflineInput(dev);
 }
@@ -861,6 +913,8 @@ function mergeImported(dev, i) {
   if (dev.functions) out.functions = dev.functions;
   if (dev.status) out.status = dev.status;
   if (dev.bt_name) out.bt_name = dev.bt_name;
+  if (dev.model) out.model = dev.model;
+  if (dev.profile) out.profile = dev.profile;
   if (dev.speeds && typeof dev.speeds === "object") out.speeds = dev.speeds;
   if (dev.ranges && typeof dev.ranges === "object") out.ranges = dev.ranges;
   if (Number.isFinite(Number(dev.offline_min))) out.offline_min = Number(dev.offline_min);
@@ -940,8 +994,8 @@ $("devIdInput").addEventListener("change", () => updateActiveDevice({ device_id:
 $("uuidInput").addEventListener("change", () => updateActiveDevice({ uuid: uuidInput.value.trim() }));
 
 // ---- speed limits (dp 101/102/103 = Eco / D / S max speed, km/h) ----
-// Set with a slider (progress bar) inside each mode's fixed allowed range
-// (SPEED_DEFAULT_RANGES, declared above). The ranges are deliberately NOT
+// Set with a slider (progress bar) inside each mode's allowed range, taken from
+// the active profile's model (DEVICE_MODELS, declared above). The ranges are NOT
 // editable here: to write an exact value, or one outside the range, use the raw
 // datapoint sender in Debug.
 const speedCap = k => k.charAt(0).toUpperCase() + k.slice(1);
@@ -954,9 +1008,10 @@ function renderSpeedVal(key) {
 }
 
 function loadSpeedInputs(dev) {
+  renderSpeedLabels(dev);
   const s = (dev && dev.speeds) || {};
   for (const [key] of SPEED_DPS) {
-    const d = SPEED_DEFAULT_RANGES[key];
+    const d = speedRange(dev, key);
     const el = speedInputEl(key);
     el.min = String(d.min);
     el.max = String(d.max);
@@ -979,7 +1034,7 @@ $("speedSaveBtn").addEventListener("click", async () => {
   // Values are stored per profile even with no live session; only the datapoints
   // that actually changed are sent (and only when armed).
   for (const [key] of SPEED_DPS) {
-    const d = SPEED_DEFAULT_RANGES[key];
+    const d = speedRange(dev, key);
     const el = speedInputEl(key);
     let v = Math.round(Number(el.value));
     if (!Number.isFinite(v)) v = d.max;
@@ -2815,6 +2870,7 @@ $("copyLogBtn").onclick = async () => {
 (async function boot() {
   log("app v" + APP_VERSION);
   const ok = await Crypto.load();
+  fillModelSelect();
   restoreDevices(); // builds the controls and, when offline, restores the last-seen state
   setUnit(unit);
   applyDevMode();

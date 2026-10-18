@@ -120,12 +120,17 @@ to hide it again; the choice is remembered in `localStorage`):
   app offers (once) to save the connected device's advertised name as the
   filter. Importing a JSON merges into this list, and the credentials below
   always apply to the selected scooter.
+- **Scooter model** — a list of supported models in Settings. Each model is a
+  profile carrying that scooter's per-mode speed ranges; the chosen key is saved
+  on the device profile (`profile`) and the sliders below re-bound to it. Only
+  **AOVO Pro S9 (YFS-Z1)** exists so far; more can be added to `DEVICE_MODELS`.
 - **Speed limits** — the Eco / D / S maximum speed (dp 101 / 102 / 103, km/h),
-  set with a **slider** per mode confined to that mode's **fixed** range (the
-  values we reverse-engineered: Eco 5–15, D 10–24, S 20–31). The range is not
-  editable here — writing an exact or out-of-range value is done with the raw
-  Debug datapoint sender. The value is stored per profile (saved even offline)
-  and only the datapoints that changed are written.
+  set with a **slider** per mode confined to that mode's **fixed** range, taken
+  from the selected model (AOVO Pro S9: Eco 5–15, D 10–24, S 20–31) and shown in
+  the mode's label. The range is not editable here — writing an exact or
+  out-of-range value is done with the raw Debug datapoint sender. The value is
+  stored per profile (saved even offline) and only the datapoints that changed
+  are written.
 - **Start mode** — how the scooter pulls away from a standstill (dp 16, an
   ENUM): `0` = start directly on the throttle, `1` = run/push to start. Lives on
   the **Ride** dashboard (Scooter controls), shown as a selector, sent directly
