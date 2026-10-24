@@ -3,7 +3,7 @@
 // BUMP SW_VERSION EVERY TIME THIS FILE (or any cached asset's caching logic)
 // CHANGES. A new version string creates a fresh cache and drops the old one,
 // which is what makes the installed PWA pick up the update.
-const SW_VERSION = "0.7.37";
+const SW_VERSION = "0.7.38";
 const CACHE = "escooter-" + SW_VERSION;
 
 const ASSETS = [

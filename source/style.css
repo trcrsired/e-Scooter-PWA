@@ -698,3 +698,92 @@ main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 .announce-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .announce-field { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--muted); }
 .announce-field input { width: 76px; min-height: 40px; }
+
+/* Two desktop columns; on phones the wrappers vanish so the flow is unchanged. */
+.ride-main,
+.ride-side { display: contents; }
+
+/* ---------------- wide screens: laptop / desktop / tablet landscape ---------------- */
+@media (min-width: 900px) {
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px 16px;
+    max-width: 1120px;
+    padding: 24px 24px calc(120px + env(safe-area-inset-bottom));
+  }
+
+  /* compact toolbar: connection state left, connect button right */
+  .status { grid-column: 1; margin-bottom: 0; }
+  #connectBtn { grid-column: 2; width: 280px; }
+  .last-seen { grid-column: 1 / -1; margin: 0; }
+  #view-debug { grid-column: 1 / -1; }
+
+  .appbar {
+    padding-left: max(24px, calc((100% - 1120px) / 2 + 24px));
+    padding-right: max(24px, calc((100% - 1120px) / 2 + 24px));
+    padding-top: calc(env(safe-area-inset-top) + 12px);
+    padding-bottom: 12px;
+  }
+  .appbar h1 { font-size: 1.2rem; }
+  .device-name { max-width: 32%; font-size: 0.85rem; }
+
+  /* ride: speed/controls on the left, settings and live data on the right */
+  #view-ride:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.85fr);
+    gap: 26px;
+    align-items: start;
+    grid-column: 1 / -1;
+  }
+  .ride-main,
+  .ride-side { display: block; min-width: 0; }
+  .ride-side > .section:first-child { margin-top: 0; }
+
+  .speed-hero { padding: 26px 20px 20px; }
+  .speed-value #rideSpeed { font-size: 6.4rem; }
+  .speed-unit { font-size: 1.35rem; }
+  .ride-stats { gap: 10px; }
+  .stat { padding: 14px 10px; }
+  .stat .stat-value { font-size: 1.2rem; }
+  .ride-side .tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+  /* diagnostics use the full width */
+  #view-debug .tiles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .log-wrap { max-width: none; padding-left: 0; padding-right: 0; }
+  .log { max-height: 52dvh; }
+
+  /* bottom tabs become a floating centred pill */
+  .tabbar {
+    left: 50%;
+    right: auto;
+    bottom: 20px;
+    width: min(600px, calc(100vw - 48px));
+    transform: translateX(-50%);
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18);
+  }
+  .tab { min-height: 42px; }
+  .toast { bottom: calc(98px + env(safe-area-inset-bottom)); }
+
+  /* settings is a centred dialog rather than a full-screen page */
+  #settingsOverlay {
+    align-items: center;
+    padding: 32px 24px;
+    background: var(--overlay);
+  }
+  #settingsOverlay .sheet {
+    width: 100%;
+    max-width: 780px;
+    height: auto;
+    max-height: 88dvh;
+    border-radius: 20px;
+    padding: 26px 30px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+    transform: translateY(18px) scale(0.985);
+  }
+  #settingsOverlay.open .sheet { transform: none; }
+  #confirmOverlay { padding: 24px; }
+}

@@ -43,93 +43,97 @@
 
     <!-- ---------------- Ride (normal) ---------------- -->
     <section id="view-ride" class="view">
-      <div class="unit-seg" id="unitSeg" role="group" aria-label="Speed unit">
-        <button id="unitKmh" class="seg-btn is-active" data-unit="kmh">km/h</button>
-        <button id="unitMph" class="seg-btn" data-unit="mph">mph</button>
-        <button id="unitMs" class="seg-btn" data-unit="ms">m/s</button>
+      <div class="ride-main">
+        <div class="unit-seg" id="unitSeg" role="group" aria-label="Speed unit">
+          <button id="unitKmh" class="seg-btn is-active" data-unit="kmh">km/h</button>
+          <button id="unitMph" class="seg-btn" data-unit="mph">mph</button>
+          <button id="unitMs" class="seg-btn" data-unit="ms">m/s</button>
+        </div>
+
+        <div class="wake-row">
+          <label class="switch"><input id="wakeToggle" type="checkbox"><span class="slider"></span></label>
+          <span id="wakeLabel" class="wake-label"></span>
+        </div>
+
+        <div class="speed-hero">
+          <div class="mode-seg" id="modeSeg" role="group" aria-label="Ride mode">
+            <button id="modeWalk" class="mode-btn" data-mode="walk"></button>
+            <button id="modeEco" class="mode-btn" data-mode="eco"></button>
+            <button id="modeD" class="mode-btn" data-mode="d"></button>
+            <button id="modeS" class="mode-btn" data-mode="s"></button>
+          </div>
+          <div class="speed-value"><span id="rideSpeed">0</span><span class="speed-unit" id="rideSpeedUnit">km/h</span></div>
+          <div class="speed-state" id="rideGpsState"></div>
+          <div class="speed-state" id="rideGpsCoords"></div>
+        </div>
+
+        <div class="ride-controls">
+          <button id="lockBtn" class="lock-btn" type="button">
+            <span id="lockIcon" class="lock-icon"></span><span id="lockText"></span>
+          </button>
+          <button id="lightBtn" class="lock-btn" type="button">
+            <span id="lightIcon" class="lock-icon"></span><span id="lightText"></span>
+          </button>
+          <button id="cruiseBtn" class="lock-btn" type="button">
+            <span id="cruiseIcon" class="lock-icon"></span><span id="cruiseText"></span>
+          </button>
+        </div>
+
+        <div class="ride-stats">
+          <div class="stat"><div class="stat-label" id="lblTrip"></div><div class="stat-value"><span id="rideTrip">0.00</span><span class="stat-unit" id="rideTripUnit">km</span></div></div>
+          <div class="stat"><div class="stat-label" id="lblMax"></div><div class="stat-value"><span id="rideMax">0</span><span class="stat-unit" id="rideMaxUnit">km/h</span></div></div>
+          <div class="stat"><div class="stat-label" id="lblAvg"></div><div class="stat-value"><span id="rideAvg">0</span><span class="stat-unit" id="rideAvgUnit">km/h</span></div></div>
+          <div class="stat"><div class="stat-label" id="lblTime"></div><div class="stat-value"><span id="rideTime">0:00</span></div></div>
+        </div>
+
+        <button id="gpsBtn" class="primary"></button>
       </div>
 
-      <div class="wake-row">
-        <label class="switch"><input id="wakeToggle" type="checkbox"><span class="slider"></span></label>
-        <span id="wakeLabel" class="wake-label"></span>
+      <div class="ride-side">
+        <section class="section">
+          <h2 id="scooterCtlTitle"></h2>
+          <div class="field">
+            <label id="startLabel" for="startSelect"></label>
+            <select id="startSelect">
+              <option value="0"></option>
+              <option value="1"></option>
+            </select>
+            <span id="startStatus" class="saved-note"></span>
+          </div>
+          <div class="field">
+            <label id="panelUnitLabel" for="panelUnitSelect"></label>
+            <select id="panelUnitSelect">
+              <option value="0"></option>
+              <option value="1"></option>
+            </select>
+            <span id="panelUnitStatus" class="saved-note"></span>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2 id="announceTitle"></h2>
+          <div class="announce-row">
+            <label class="switch"><input id="ttsToggle" type="checkbox"><span class="slider"></span></label>
+            <label class="announce-field" for="ttsEvery"><span id="lblEvery"></span><input id="ttsEvery" type="number" min="5" step="5" value="30"></label>
+            <label class="announce-field" for="ttsMax"><span id="lblTimes"></span><input id="ttsMax" type="number" min="0" step="1" placeholder="\u221e"></label>
+          </div>
+          <div class="tile-meta" id="ttsState"></div>
+        </section>
+
+        <section class="section">
+          <h2 id="warnTitle"></h2>
+          <div class="announce-row">
+            <label class="switch"><input id="warnToggle" type="checkbox"><span class="slider"></span></label>
+            <label class="announce-field" for="warnSpeed"><span id="lblWarnAbove"></span><input id="warnSpeed" type="number" min="1" step="1" value="25"><span id="warnUnit"></span></label>
+          </div>
+          <div class="tile-meta" id="warnState"></div>
+        </section>
+
+        <section class="section">
+          <h2 id="rideScooterTitle"></h2>
+          <div class="tiles" id="rideCards"></div>
+        </section>
       </div>
-
-      <div class="speed-hero">
-        <div class="mode-seg" id="modeSeg" role="group" aria-label="Ride mode">
-          <button id="modeWalk" class="mode-btn" data-mode="walk"></button>
-          <button id="modeEco" class="mode-btn" data-mode="eco"></button>
-          <button id="modeD" class="mode-btn" data-mode="d"></button>
-          <button id="modeS" class="mode-btn" data-mode="s"></button>
-        </div>
-        <div class="speed-value"><span id="rideSpeed">0</span><span class="speed-unit" id="rideSpeedUnit">km/h</span></div>
-        <div class="speed-state" id="rideGpsState"></div>
-        <div class="speed-state" id="rideGpsCoords"></div>
-      </div>
-
-      <div class="ride-controls">
-        <button id="lockBtn" class="lock-btn" type="button">
-          <span id="lockIcon" class="lock-icon"></span><span id="lockText"></span>
-        </button>
-        <button id="lightBtn" class="lock-btn" type="button">
-          <span id="lightIcon" class="lock-icon"></span><span id="lightText"></span>
-        </button>
-        <button id="cruiseBtn" class="lock-btn" type="button">
-          <span id="cruiseIcon" class="lock-icon"></span><span id="cruiseText"></span>
-        </button>
-      </div>
-
-      <section class="section">
-        <h2 id="scooterCtlTitle"></h2>
-        <div class="field">
-          <label id="startLabel" for="startSelect"></label>
-          <select id="startSelect">
-            <option value="0"></option>
-            <option value="1"></option>
-          </select>
-          <span id="startStatus" class="saved-note"></span>
-        </div>
-        <div class="field">
-          <label id="panelUnitLabel" for="panelUnitSelect"></label>
-          <select id="panelUnitSelect">
-            <option value="0"></option>
-            <option value="1"></option>
-          </select>
-          <span id="panelUnitStatus" class="saved-note"></span>
-        </div>
-      </section>
-
-      <div class="ride-stats">
-        <div class="stat"><div class="stat-label" id="lblTrip"></div><div class="stat-value"><span id="rideTrip">0.00</span><span class="stat-unit" id="rideTripUnit">km</span></div></div>
-        <div class="stat"><div class="stat-label" id="lblMax"></div><div class="stat-value"><span id="rideMax">0</span><span class="stat-unit" id="rideMaxUnit">km/h</span></div></div>
-        <div class="stat"><div class="stat-label" id="lblAvg"></div><div class="stat-value"><span id="rideAvg">0</span><span class="stat-unit" id="rideAvgUnit">km/h</span></div></div>
-        <div class="stat"><div class="stat-label" id="lblTime"></div><div class="stat-value"><span id="rideTime">0:00</span></div></div>
-      </div>
-
-      <button id="gpsBtn" class="primary"></button>
-
-      <section class="section">
-        <h2 id="announceTitle"></h2>
-        <div class="announce-row">
-          <label class="switch"><input id="ttsToggle" type="checkbox"><span class="slider"></span></label>
-          <label class="announce-field" for="ttsEvery"><span id="lblEvery"></span><input id="ttsEvery" type="number" min="5" step="5" value="30"></label>
-          <label class="announce-field" for="ttsMax"><span id="lblTimes"></span><input id="ttsMax" type="number" min="0" step="1" placeholder="\u221e"></label>
-        </div>
-        <div class="tile-meta" id="ttsState"></div>
-      </section>
-
-      <section class="section">
-        <h2 id="warnTitle"></h2>
-        <div class="announce-row">
-          <label class="switch"><input id="warnToggle" type="checkbox"><span class="slider"></span></label>
-          <label class="announce-field" for="warnSpeed"><span id="lblWarnAbove"></span><input id="warnSpeed" type="number" min="1" step="1" value="25"><span id="warnUnit"></span></label>
-        </div>
-        <div class="tile-meta" id="warnState"></div>
-      </section>
-
-      <section class="section">
-        <h2 id="rideScooterTitle"></h2>
-        <div class="tiles" id="rideCards"></div>
-      </section>
     </section>
 
     <!-- ---------------- Debug ---------------- -->
